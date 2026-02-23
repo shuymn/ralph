@@ -82,9 +82,23 @@ tasks:
         silent: true
       - "{{.BIN_DIR}}/golangci-lint fmt"
 
-  check:
-    desc: Run all checks (test, lint, build)
+  schema:
+    desc: Regenerate config schema artifact
     cmds:
+      - go run ./cmd/ralph
+
+  schema:check:
+    desc: Verify config schema artifact has no drift
+    deps:
+      - task: schema
+        silent: true
+    cmds:
+      - git diff --exit-code -- schemas/config.schema.json
+
+  check:
+    desc: Run all checks (schema drift, lint, build, test)
+    cmds:
+      - task: schema:check
       - task: lint
       - task: build
       - task: test

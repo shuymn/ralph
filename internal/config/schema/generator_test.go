@@ -66,6 +66,58 @@ func TestArtifactExistsAndMatchesGenerate(t *testing.T) {
 	}
 }
 
+func TestGenerateIsDeterministic(t *testing.T) {
+	t.Parallel()
+
+	first, err := ralphschema.Generate()
+	if err != nil {
+		t.Fatalf("first Generate() error = %v", err)
+	}
+	second, err := ralphschema.Generate()
+	if err != nil {
+		t.Fatalf("second Generate() error = %v", err)
+	}
+
+	if string(first) != string(second) {
+		t.Fatalf("Generate() output must be deterministic across repeated calls")
+	}
+}
+
+func TestWriteRootIsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := filepath.Join(root, ralphschema.ArtifactPath)
+
+	if err := ralphschema.WriteRoot(root); err != nil {
+		t.Fatalf("first WriteRoot() error = %v", err)
+	}
+	first, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read first generated artifact %q: %v", path, err)
+	}
+
+	if err := ralphschema.WriteRoot(root); err != nil {
+		t.Fatalf("second WriteRoot() error = %v", err)
+	}
+	second, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read second generated artifact %q: %v", path, err)
+	}
+
+	if string(first) != string(second) {
+		t.Fatalf("WriteRoot() output must be idempotent")
+	}
+
+	want, err := ralphschema.Generate()
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if string(second) != string(want) {
+		t.Fatalf("generated artifact must match Generate() output")
+	}
+}
+
 func TestTemplateSchemaReferenceMatchesArtifactPath(t *testing.T) {
 	t.Parallel()
 
