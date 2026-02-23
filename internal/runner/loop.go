@@ -12,6 +12,7 @@ import (
 
 	ralphcondition "github.com/shuymn/ralph/internal/condition"
 	ralphconfig "github.com/shuymn/ralph/internal/config"
+	ralphgit "github.com/shuymn/ralph/internal/git"
 	ralphprd "github.com/shuymn/ralph/internal/prd"
 )
 
@@ -25,15 +26,13 @@ const (
 const noExitCode = -1
 
 const (
-	ralphDirName   = ".ralph"
-	promptFileName = "prompt.md"
-	prdFileName    = "prd.json"
+	ralphDirName          = ".ralph"
+	promptFileName        = "prompt.md"
+	prdFileName           = "prd.json"
+	commitMessageFileName = ".commit-msg"
 )
 
-var (
-	errAutoCommitNotImplemented = errors.New("uses: auto_commit is not implemented yet")
-	errUnsupportedUsesStep      = errors.New("unsupported uses step")
-)
+var errUnsupportedUsesStep = errors.New("unsupported uses step")
 
 type Options struct {
 	WorkingDir string
@@ -44,8 +43,9 @@ type Options struct {
 }
 
 type fixedPaths struct {
-	Prompt string
-	PRD    string
+	Prompt        string
+	PRD           string
+	CommitMessage string
 }
 
 type phaseState struct {
@@ -65,6 +65,13 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 	}
 	opts = normalizeOptions(opts)
 	paths := resolvePaths(opts.WorkingDir)
+	autoCommitBase := ralphgit.Options{
+		WorkingDir:        opts.WorkingDir,
+		Mode:              cfg.Git.Commit,
+		FallbackMessage:   cfg.Git.FallbackMessage,
+		PRDPath:           paths.PRD,
+		CommitMessagePath: paths.CommitMessage,
+	}
 
 	tracker := newTmpTracker()
 	defer tracker.cleanupAll()
@@ -80,11 +87,13 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			return ExitCodeRuntime
 		}
 
-		// Keep before snapshot in-memory for task_id extraction in a later task.
-		if _, err := loadPRD(paths.PRD); err != nil {
+		beforePRD, err := loadPRD(paths.PRD)
+		if err != nil {
 			logRuntimeError(opts.Stderr, err)
 			return ExitCodeRuntime
 		}
+		autoCommitOpts := autoCommitBase
+		autoCommitOpts.BeforePRD = beforePRD
 
 		changedFunc := ralphcondition.NewGitChangedFunc(opts.WorkingDir)
 
@@ -93,6 +102,7 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			cfg.Phases.Pre.Steps,
 			&phaseState{success: true, failure: false},
 			changedFunc,
+			autoCommitOpts,
 			opts,
 		)
 		if err != nil {
@@ -116,6 +126,7 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			cfg.Phases.Post.Steps,
 			&phaseState{success: mainResult.Success, failure: !mainResult.Success},
 			changedFunc,
+			autoCommitOpts,
 			opts,
 		)
 		if err != nil {
@@ -153,6 +164,7 @@ func runPhase(
 	steps []ralphconfig.Step,
 	state *phaseState,
 	changed ralphcondition.ChangedFunc,
+	autoCommitOpts ralphgit.Options,
 	opts Options,
 ) (phaseResult, error) {
 	for _, step := range steps {
@@ -175,7 +187,7 @@ func runPhase(
 			continue
 		}
 
-		err = runStep(ctx, step, opts)
+		err = runStep(ctx, step, autoCommitOpts, opts)
 		if err == nil {
 			continue
 		}
@@ -190,7 +202,12 @@ func runPhase(
 	return phaseResult{}, nil
 }
 
-func runStep(ctx context.Context, step ralphconfig.Step, opts Options) error {
+func runStep(
+	ctx context.Context,
+	step ralphconfig.Step,
+	autoCommitOpts ralphgit.Options,
+	opts Options,
+) error {
 	runCommand := strings.TrimSpace(step.Run)
 	if runCommand != "" {
 		return runStepCommand(ctx, runCommand, opts)
@@ -198,7 +215,10 @@ func runStep(ctx context.Context, step ralphconfig.Step, opts Options) error {
 
 	uses := strings.TrimSpace(step.Uses)
 	if uses == "auto_commit" {
-		return errAutoCommitNotImplemented
+		if err := ralphgit.AutoCommit(ctx, autoCommitOpts); err != nil {
+			return fmt.Errorf("run auto_commit step: %w", err)
+		}
+		return nil
 	}
 
 	return fmt.Errorf("%w: %q", errUnsupportedUsesStep, uses)
@@ -207,8 +227,9 @@ func runStep(ctx context.Context, step ralphconfig.Step, opts Options) error {
 func resolvePaths(workingDir string) fixedPaths {
 	base := filepath.Join(workingDir, ralphDirName)
 	return fixedPaths{
-		Prompt: filepath.Join(base, promptFileName),
-		PRD:    filepath.Join(base, prdFileName),
+		Prompt:        filepath.Join(base, promptFileName),
+		PRD:           filepath.Join(base, prdFileName),
+		CommitMessage: filepath.Join(base, commitMessageFileName),
 	}
 }
 
