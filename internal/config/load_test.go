@@ -165,6 +165,44 @@ phases:
 	assertErrorCode(t, err, ralphconfig.ErrCodeConfigParse)
 }
 
+func TestLoadBytesRejectsUnknownTopLevelField(t *testing.T) {
+	t.Parallel()
+
+	_, err := ralphconfig.LoadBytes([]byte(`
+version: "1"
+agent:
+  command: "echo hello"
+git:
+  commit: split
+phases:
+  pre:
+    steps: []
+  post:
+    steps: []
+unknown_top_level: true
+`))
+	assertErrorCode(t, err, ralphconfig.ErrCodeConfigParse)
+}
+
+func TestLoadBytesRejectsUnknownNestedField(t *testing.T) {
+	t.Parallel()
+
+	_, err := ralphconfig.LoadBytes([]byte(`
+version: "1"
+agent:
+  command: "echo hello"
+  unknown_nested: 1
+git:
+  commit: split
+phases:
+  pre:
+    steps: []
+  post:
+    steps: []
+`))
+	assertErrorCode(t, err, ralphconfig.ErrCodeConfigParse)
+}
+
 func assertErrorCode(t *testing.T, err error, wantCode string) {
 	t.Helper()
 

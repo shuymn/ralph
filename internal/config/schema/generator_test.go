@@ -7,7 +7,14 @@ import (
 	"strings"
 	"testing"
 
+	ralphconfig "github.com/shuymn/ralph/internal/config"
 	ralphschema "github.com/shuymn/ralph/internal/config/schema"
+)
+
+const (
+	gitCommitTogetherValue = "together"
+	stepOnFailContinue     = "continue"
+	stepUsesAutoCommit     = "auto_commit"
 )
 
 func TestGenerateIncludesHeaderAndTopLevelKeys(t *testing.T) {
@@ -79,4 +86,189 @@ func TestTemplateSchemaReferenceMatchesArtifactPath(t *testing.T) {
 	if !strings.Contains(lines[0], wantSuffix) {
 		t.Fatalf("schema directive %q must contain %q", lines[0], wantSuffix)
 	}
+}
+
+func TestSchemaConstraints(t *testing.T) {
+	t.Parallel()
+
+	doc := mustSchemaDoc(t)
+
+	version := mustMapAtPath(t, doc, "properties", "version")
+	if gotConst, ok := version["const"].(string); !ok || gotConst != ralphconfig.SupportedVersion {
+		t.Fatalf("version.const = %v, want %q", version["const"], ralphconfig.SupportedVersion)
+	}
+	assertAdditionalPropertiesFalse(t, "root", doc)
+
+	git := mustMapAtPath(t, doc, "properties", "git")
+	assertAdditionalPropertiesFalse(t, "git", git)
+	assertEnumValues(
+		t,
+		mustMapAtPath(t, git, "properties", "commit"),
+		[]string{ralphconfig.DefaultGitCommitMode, gitCommitTogetherValue},
+	)
+
+	phases := mustMapAtPath(t, doc, "properties", "phases")
+	assertAdditionalPropertiesFalse(t, "phases", phases)
+
+	for _, phase := range []string{"pre", "post"} {
+		phaseSchema := mustMapAtPath(t, phases, "properties", phase)
+		assertAdditionalPropertiesFalse(t, "phases."+phase, phaseSchema)
+
+		step := mustStepSchema(t, phaseSchema)
+		assertAdditionalPropertiesFalse(t, "phases."+phase+".steps.items", step)
+		assertEnumValues(
+			t,
+			mustMapAtPath(t, step, "properties", "on_fail"),
+			[]string{stepOnFailContinue, ralphconfig.DefaultStepOnFail},
+		)
+		assertEnumValues(
+			t,
+			mustMapAtPath(t, step, "properties", "uses"),
+			[]string{stepUsesAutoCommit},
+		)
+		assertStepRunUsesXOR(t, step)
+	}
+}
+
+func mustSchemaDoc(t *testing.T) map[string]any {
+	t.Helper()
+
+	output, err := ralphschema.Generate()
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal(output, &doc); err != nil {
+		t.Fatalf("schema JSON must be valid: %v", err)
+	}
+
+	return doc
+}
+
+func mustStepSchema(t *testing.T, phaseSchema map[string]any) map[string]any {
+	t.Helper()
+
+	return mustMapAtPath(t, phaseSchema, "properties", "steps", "items")
+}
+
+func mustMapAtPath(t *testing.T, root map[string]any, path ...string) map[string]any {
+	t.Helper()
+
+	current := any(root)
+	for _, key := range path {
+		obj, ok := current.(map[string]any)
+		if !ok {
+			t.Fatalf("path %q has non-object segment %T", strings.Join(path, "."), current)
+		}
+		next, ok := obj[key]
+		if !ok {
+			t.Fatalf("path %q is missing key %q", strings.Join(path, "."), key)
+		}
+		current = next
+	}
+
+	result, ok := current.(map[string]any)
+	if !ok {
+		t.Fatalf("path %q must resolve to object, got %T", strings.Join(path, "."), current)
+	}
+
+	return result
+}
+
+func assertAdditionalPropertiesFalse(t *testing.T, name string, schema map[string]any) {
+	t.Helper()
+
+	value, ok := schema["additionalProperties"].(bool)
+	if !ok || value {
+		t.Fatalf("%s.additionalProperties = %v, want false", name, schema["additionalProperties"])
+	}
+}
+
+func assertEnumValues(t *testing.T, schema map[string]any, want []string) {
+	t.Helper()
+
+	rawEnum, ok := schema["enum"].([]any)
+	if !ok {
+		t.Fatalf("enum is missing: %#v", schema)
+	}
+	if len(rawEnum) != len(want) {
+		t.Fatalf("enum length = %d, want %d (%v)", len(rawEnum), len(want), want)
+	}
+
+	remaining := make(map[string]struct{}, len(want))
+	for _, value := range want {
+		remaining[value] = struct{}{}
+	}
+	for _, raw := range rawEnum {
+		value, ok := raw.(string)
+		if !ok {
+			t.Fatalf("enum value must be string, got %T", raw)
+		}
+		if _, exists := remaining[value]; !exists {
+			t.Fatalf("unexpected enum value %q (want %v)", value, want)
+		}
+		delete(remaining, value)
+	}
+	if len(remaining) > 0 {
+		t.Fatalf("missing enum values: %v", mapKeys(remaining))
+	}
+}
+
+func assertStepRunUsesXOR(t *testing.T, stepSchema map[string]any) {
+	t.Helper()
+
+	branches, ok := stepSchema["oneOf"].([]any)
+	if !ok {
+		t.Fatalf("oneOf is missing on step schema")
+	}
+	if len(branches) != 2 {
+		t.Fatalf("step oneOf branch count = %d, want 2", len(branches))
+	}
+
+	hasRunRequired := false
+	hasUsesRequired := false
+	for _, branchRaw := range branches {
+		branch, ok := branchRaw.(map[string]any)
+		if !ok {
+			t.Fatalf("oneOf branch must be object, got %T", branchRaw)
+		}
+		required := toStringSet(t, branch["required"])
+		if _, exists := required["run"]; exists {
+			hasRunRequired = true
+		}
+		if _, exists := required["uses"]; exists {
+			hasUsesRequired = true
+		}
+	}
+
+	if !hasRunRequired || !hasUsesRequired {
+		t.Fatalf("step oneOf must contain required branches for run and uses")
+	}
+}
+
+func toStringSet(t *testing.T, value any) map[string]struct{} {
+	t.Helper()
+
+	list, ok := value.([]any)
+	if !ok {
+		t.Fatalf("required must be an array, got %T", value)
+	}
+	set := make(map[string]struct{}, len(list))
+	for _, item := range list {
+		str, ok := item.(string)
+		if !ok {
+			t.Fatalf("required value must be string, got %T", item)
+		}
+		set[str] = struct{}{}
+	}
+	return set
+}
+
+func mapKeys(values map[string]struct{}) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	return keys
 }
