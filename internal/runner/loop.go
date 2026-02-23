@@ -64,11 +64,12 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 		ctx = context.Background()
 	}
 	opts = normalizeOptions(opts)
-	paths := resolvePaths(opts.WorkingDir)
+	plan := buildRunPlan(cfg, opts.WorkingDir)
+	paths := plan.Paths
 	autoCommitBase := ralphgit.Options{
 		WorkingDir:        opts.WorkingDir,
-		Mode:              cfg.Git.Commit,
-		FallbackMessage:   cfg.Git.FallbackMessage,
+		Mode:              plan.Git.Commit,
+		FallbackMessage:   plan.Git.FallbackMessage,
 		PRDPath:           paths.PRD,
 		CommitMessagePath: paths.CommitMessage,
 	}
@@ -81,7 +82,7 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 		return ExitCodeRuntime
 	}
 
-	for range cfg.Agent.MaxIterations {
+	for range plan.Agent.MaxIterations {
 		if ctx.Err() != nil {
 			logRuntimeError(opts.Stderr, fmt.Errorf("run loop canceled: %w", ctx.Err()))
 			return ExitCodeRuntime
@@ -99,7 +100,7 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 
 		preResult, err := runPhase(
 			ctx,
-			cfg.Phases.Pre.Steps,
+			plan.PreSteps,
 			&phaseState{success: true, failure: false},
 			changedFunc,
 			autoCommitOpts,
@@ -114,7 +115,7 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			return ExitCodeStopLoop
 		}
 
-		mainResult, err := runMainStep(ctx, cfg.Agent.Command, paths.Prompt, opts, tracker)
+		mainResult, err := runMainStep(ctx, plan.Agent.Command, paths.Prompt, opts, tracker)
 		if err != nil {
 			tracker.cleanup(mainResult.OutputPath)
 			logRuntimeError(opts.Stderr, err)
@@ -123,7 +124,7 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 
 		postResult, err := runPhase(
 			ctx,
-			cfg.Phases.Post.Steps,
+			plan.PostSteps,
 			&phaseState{success: mainResult.Success, failure: !mainResult.Success},
 			changedFunc,
 			autoCommitOpts,
@@ -140,7 +141,7 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			return ExitCodeStopLoop
 		}
 
-		completionCode, err := completeIteration(mainResult, paths.PRD, cfg.Completion, tracker)
+		completionCode, err := completeIteration(mainResult, paths.PRD, plan.Completion, tracker)
 		if err != nil {
 			logRuntimeError(opts.Stderr, err)
 			return ExitCodeRuntime
@@ -149,7 +150,7 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			return completionCode
 		}
 
-		sleepDuration := time.Duration(cfg.Agent.SleepSeconds) * time.Second
+		sleepDuration := time.Duration(plan.Agent.SleepSeconds) * time.Second
 		if err := sleep(ctx, sleepDuration, opts.Sleep); err != nil {
 			logRuntimeError(opts.Stderr, err)
 			return ExitCodeRuntime

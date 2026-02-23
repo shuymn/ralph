@@ -14,11 +14,27 @@ import (
 )
 
 func RunRun(root string, stdout, stderr io.Writer) int {
+	return runRun(root, stdout, stderr, false)
+}
+
+func RunRunDry(root string, stdout, stderr io.Writer) int {
+	return runRun(root, stdout, stderr, true)
+}
+
+func runRun(root string, stdout, stderr io.Writer, dryRun bool) int {
 	configPath := filepath.Join(root, ".ralph", "config.yml")
 	cfg, err := ralphconfig.Load(configPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "ralph run failed: %v\n", err)
 		return errorExitCode(err, 1)
+	}
+
+	if dryRun {
+		return ralphrunner.DryRun(cfg, ralphrunner.Options{
+			WorkingDir: root,
+			Stdout:     stdout,
+			Stderr:     stderr,
+		})
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
