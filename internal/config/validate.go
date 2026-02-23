@@ -3,6 +3,8 @@ package ralphconfig
 import (
 	"fmt"
 	"strings"
+
+	ralphcondition "github.com/shuymn/ralph/internal/condition"
 )
 
 const (
@@ -178,6 +180,12 @@ func validatePhase(phaseName string, phase *Phase) error {
 
 		if strings.TrimSpace(step.If) == "" {
 			step.If = DefaultStepIf
+		}
+		if _, err := ralphcondition.Parse(step.If); err != nil {
+			return newValidationError(
+				ErrCodeConfigParse,
+				fmt.Sprintf("%s step=%q has invalid if expression: %v", phaseName, name, err),
+			)
 		}
 
 		onFail := strings.TrimSpace(step.OnFail)

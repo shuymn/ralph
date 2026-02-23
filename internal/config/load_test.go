@@ -144,6 +144,27 @@ phases:
 	assertErrorCode(t, err, ralphconfig.ErrCodeConfigGitCommit)
 }
 
+func TestLoadBytesRejectsUnsupportedIfExpression(t *testing.T) {
+	t.Parallel()
+
+	_, err := ralphconfig.LoadBytes([]byte(`
+version: "1"
+agent:
+  command: "echo hello"
+git:
+  commit: split
+phases:
+  pre:
+    steps:
+      - name: bad_if
+        run: "echo pre"
+        if: steps.main.success
+  post:
+    steps: []
+`))
+	assertErrorCode(t, err, ralphconfig.ErrCodeConfigParse)
+}
+
 func assertErrorCode(t *testing.T, err error, wantCode string) {
 	t.Helper()
 
