@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/shuymn/ralph/main/schemas/config.schema.json
+# Minimal init output.
+# Optional settings (loop/completion) are omitted here and handled by defaults.
+# Prompt -> coding agent main flow is fixed and intentionally not configurable.
+# Schema is remote-resolved from this URL; `ralph init` does not generate `.ralph/config.schema.json`.
+# If the agent command may hang, wrap it with a timeout (example: GNU coreutils):
+#   command: "timeout 30m claude -p --dangerously-skip-permissions"
+
+version: "1"
+
+agent:
+  command: "claude -p --dangerously-skip-permissions"
+
+git:
+  commit: split
+  fallback_message: "feat: implement task (auto-commit)"
+
+phases:
+  pre:
+    steps: []
+  post:
+    steps:
+      - name: auto_commit
+        uses: auto_commit
+        if: changed()
+        on_fail: stop_loop

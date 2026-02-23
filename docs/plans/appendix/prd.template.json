@@ -1,0 +1,36 @@
+{
+  "project": "[replace-with-project-slug]",
+  "plan": "docs/plans/[yyyy-mm-dd]-[topic]-plan.md",
+  "stories": [
+    {
+      "id": "task-0",
+      "title": "[setup: establish baseline or refactor target]",
+      "deps": [],
+      "passes": false
+    },
+    {
+      "id": "task-1",
+      "title": "[core implementation slice #1]",
+      "deps": [
+        "task-0"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-2",
+      "title": "[core implementation slice #2]",
+      "deps": [
+        "task-1"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-3",
+      "title": "[integration or verification slice]",
+      "deps": [
+        "task-2"
+      ],
+      "passes": false
+    }
+  ]
+}
