@@ -1,0 +1,48 @@
+version: "2"
+linters:
+  default: all
+  disable:
+    - depguard
+    - cyclop
+    - exhaustruct
+    - forbidigo
+    - funlen
+    - godot
+    - ireturn
+    - lll
+    - nlreturn
+    - paralleltest
+    - varnamelen
+    - wsl
+    - gocognit
+    - contextcheck
+    - wsl_v5
+    - noinlineerr
+    - gochecknoglobals
+    - goconst
+  settings:
+    mnd:
+      ignored-numbers:
+        - "0o700"
+        - "0o755"
+  exclusions:
+    warn-unused: true
+    presets:
+      - comments
+      - std-error-handling
+      - common-false-positives
+      - legacy
+    rules:
+      - linters:
+          - err113
+          - noctx
+        path: _test\.go
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
+  exclusions:
+    warn-unused: true
