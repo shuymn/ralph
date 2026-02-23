@@ -24,7 +24,7 @@
 - RED: Add tests that fail when `init` does not create all four template outputs, does not print skipped paths on stderr, or misses schema comment injection in `config.yml`.
 - GREEN: Implement scaffold creation, `YYYY-MM-DD` templating for `progress.md`, skip-if-exists logging, and schema URL header in config template.
 - REFACTOR: Centralize template rendering and file creation error handling for consistent diagnostics.
-- DoD: Run `go test ./... -run Init`; expected: new-project scaffold passes and existing-file skip path assertions pass.
+- DoD: Run `task check`; expected: new-project scaffold passes and existing-file skip path assertions pass.
 
 ## Task 2: Add config and `prd.json` load-time validation
 
@@ -36,7 +36,7 @@
 - RED: Add failing tests for invalid step shape (`run` + `uses`, missing `name`), unsupported builtin, invalid `on_fail`, invalid commit mode, and malformed/duplicate/empty story IDs in `prd.json`.
 - GREEN: Implement strict structural checks, defaults (`if=success()`, `on_fail=stop_loop`), and `prd.json` constraints (`stories` required, unique IDs, boolean `passes`, string-array `deps`).
 - REFACTOR: Separate parse errors from semantic validation errors and normalize error codes for caller mapping.
-- DoD: Run `go test ./... -run 'Config|PRD'`; expected: invalid fixtures return exit-code-mappable validation errors.
+- DoD: Run `task check`; expected: invalid fixtures return exit-code-mappable validation errors.
 
 ## Task 3: Implement expression evaluator for step `if`
 
@@ -48,7 +48,7 @@
 - RED: Add failing tests for supported functions (`always`, `success`, `failure`, `changed`), boolean operators, parentheses, unknown symbols, and `changed()` git command failure mapping.
 - GREEN: Implement parser/evaluator and runtime callback for `changed()` (`git status --porcelain`) with error propagation for exit 22 paths.
 - REFACTOR: Extract reusable evaluation context object so pre/main/post phases share the same semantics.
-- DoD: Run `go test ./... -run Condition`; expected: expression truth tables and error cases all pass.
+- DoD: Run `task check`; expected: expression truth tables and error cases all pass.
 
 ## Task 4: Build the core run loop and completion checks
 
@@ -60,7 +60,7 @@
 - RED: Add failing integration-style tests for phase ordering, `stop_loop phase=<phase> step=<step> reason=<reason>` logging, exit-code behavior (0/20/21/22/23), completion mismatch handling, and tmpfile deletion on success/failure/signal.
 - GREEN: Implement phase execution engine, main agent invocation with tmpfile capture and tail match, completion gating (`passes=true` for all stories), and guaranteed tmpfile cleanup hooks.
 - REFACTOR: Isolate exit-code classification and signal-handling cleanup to reduce branching complexity in loop control.
-- DoD: Run `go test ./... -run Runner`; expected: loop semantics, completion semantics, and cleanup guarantees pass.
+- DoD: Run `task check`; expected: loop semantics, completion semantics, and cleanup guarantees pass.
 
 ## Task 5: Implement builtin `uses: auto_commit`
 
@@ -72,7 +72,7 @@
 - RED: Add failing tests for split-mode staging rules (`.ralph/` first), together-mode all-files commit, `${task_id}` extraction constraints (exactly one `false -> true`), empty staged diff no-op, and `.ralph/.commit-msg` fallback behavior.
 - GREEN: Implement git orchestration (`git add -A`, `git restore --staged` as needed), commit message resolution, and failure paths for ambiguous task ID extraction.
 - REFACTOR: Wrap git command execution behind an interface to simplify deterministic tests and improve log consistency.
-- DoD: Run `go test ./... -run AutoCommit`; expected: split/together strategies and fallback message flow pass.
+- DoD: Run `task check`; expected: split/together strategies and fallback message flow pass.
 
 ## Task 6: Add `ralph run --dry-run` plan output
 
@@ -84,7 +84,7 @@
 - RED: Add failing tests that require dry-run output to include agent command, iteration controls, pre/post steps (`name`, `run/uses`, `if`, `on_fail`), git mode/fallback, completion config, and to assert that no subprocess runs.
 - GREEN: Implement dry-run renderer wired to existing validated config/prd/evaluator logic and command suppression.
 - REFACTOR: Share run-mode metadata assembly between normal run and dry-run output paths to prevent divergence.
-- DoD: Run `go test ./... -run DryRun`; expected: output snapshots match spec and command execution count remains zero.
+- DoD: Run `task check`; expected: output snapshots match spec and command execution count remains zero.
 
 ## Checkpoint Summary
 
