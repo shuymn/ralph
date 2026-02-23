@@ -16,10 +16,11 @@
 - Use Task (`Taskfile.yml`) as the default interface.
 - `task build`: compile `./ralph`.
 - `task run`: build and run locally.
+- `task schema`: regenerate `schemas/config.schema.json` from `internal/config` types.
 - `task test`: run `go test -race -shuffle=on -count=10 ./...`.
 - `task lint`: run project linters (`golangci-lint`, installed to `bin/`).
 - `task fmt`: apply configured Go formatters.
-- `task check`: run lint, build, and test in CI order.
+- `task check`: run schema drift check, lint, build, and test in CI order.
 - `go test -run TestName ./internal/<pkg>`: run a focused test while developing.
 
 ## Coding & Error-Handling Conventions

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`ralph init` が出力する `.ralph/config.yml` は `schemas/config.schema.json` を参照しているが、現状は schema 実体が未配備である。さらに、`internal/config` の実装変更時に schema 更新漏れが起きると、エディタ補完・検証と実ランタイム挙動が乖離する。
+`ralph init` が出力する `.ralph/config.yml` は `schemas/config.schema.json` を参照する。`internal/config` の実装変更時に schema 再生成が漏れると、エディタ補完・検証と実ランタイム挙動が乖離する。
 
 本設計は、`internal/config` の Go 型を起点に `schemas/config.schema.json` を自動生成し、CI でドリフトを検知することで、schema と実装の同期を継続的に保証する。
 
@@ -26,8 +26,8 @@
   - `LoadBytes` は `yaml.Decoder.KnownFields(true)` により unknown fields を拒否している。
   - 仕様の多くは `internal/config.Validate` に実装されている。
 - 課題:
-  - `schemas/config.schema.json` が欠落しており、参照先が 404 相当になる。
-  - 将来 schema を追加しても、手作業更新だと実装変更とのズレが再発する。
+  - schema を再生成しない運用だと、実装変更とのズレが再発する。
+  - drift 検知を CI に組み込まないと、更新漏れがレビュー時に見落とされうる。
 
 ## Design
 
@@ -89,9 +89,12 @@
 
 ## Open Questions
 
-- [ ] 生成コマンドの配置を `cmd/`（専用 CLI）と `internal/`（テスト専用呼び出し）どちらに置くか。
-- [ ] schema の整形規則（key 順序、indent、末尾改行）をどこまで固定するか。
-- [ ] 生成ポスト処理を Go コードで実装するか、JSON Patch で宣言的に実装するか。
+- [x] 生成コマンドの配置を `cmd/`（専用 CLI）と `internal/`（テスト専用呼び出し）どちらに置くか。  
+  -> `cmd/ralph/schema.go` を専用エントリポイントとし、`task schema` から実行する。
+- [x] schema の整形規則（key 順序、indent、末尾改行）をどこまで固定するか。  
+  -> `json.MarshalIndent(..., "", "  ")` + 末尾改行を標準とし、生成テストで再現性を保証する。
+- [x] 生成ポスト処理を Go コードで実装するか、JSON Patch で宣言的に実装するか。  
+  -> Go コード（データ駆動パッチ）で実装し、制約追加時はテストと同時更新する。
 
 ## Acceptance Criteria
 
