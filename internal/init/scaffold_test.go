@@ -291,8 +291,10 @@ func TestReadmeClarifiesFallbackNoGPGSignDefaultAndScaffoldSample(t *testing.T) 
 
 	text := string(content)
 	requiredSnippets := []string{
-		"default when omitted",
-		"scaffold sample",
+		"The `git` section above is a scaffold sample. It shows `fallback_no_gpg_sign: true` as",
+		"an explicit example value in generated config.",
+		"- `git.fallback_no_gpg_sign`: `false`",
+		"- If `git.fallback_no_gpg_sign` is `true` and commit fails due to GPG signing,",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(text, snippet) {
