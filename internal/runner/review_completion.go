@@ -32,12 +32,20 @@ func newReviewCompletion(profile ralphconfig.ReviewCompletionProfile) reviewComp
 	}
 }
 
-func (completion *reviewCompletion) recordJudge(result judgeContract) {
+func (completion *reviewCompletion) recordJudge(result judgeContract) error {
+	if err := validateJudgeFindingConsistency(
+		result.NewFindings,
+		result.NewFindingKeys,
+	); err != nil {
+		return err
+	}
+
 	if result.Signal == completion.signal && result.NewFindings == 0 {
 		completion.stableCount++
-		return
+		return nil
 	}
 	completion.stableCount = 0
+	return nil
 }
 
 func (completion *reviewCompletion) converged(reviewCount int) bool {

@@ -86,6 +86,42 @@ func TestJudgeContractRejectsNegativeNewFindings(t *testing.T) {
 	}
 }
 
+func TestJudgeContractRejectsInconsistentFindings(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		judgeOutput string
+	}{
+		{
+			name:        "zero findings with non-empty keys",
+			judgeOutput: `{"signal":"READY","new_findings":0,"new_finding_keys":["F1"]}` + "\n",
+		},
+		{
+			name:        "non-zero findings with empty keys",
+			judgeOutput: `{"signal":"READY","new_findings":1,"new_finding_keys":[]}` + "\n",
+		},
+		{
+			name:        "count mismatch",
+			judgeOutput: `{"signal":"READY","new_findings":2,"new_finding_keys":["F1"]}` + "\n",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			code, stderr := runReviewWithJudgeOutput(t, tc.judgeOutput)
+			if code != ralphrunner.ExitCodeRuntime {
+				t.Fatalf("expected runtime exit code %d, got %d", ralphrunner.ExitCodeRuntime, code)
+			}
+			if !strings.Contains(stderr, "new_findings must match len(new_finding_keys)") {
+				t.Fatalf("expected findings consistency error in stderr, got %q", stderr)
+			}
+		})
+	}
+}
+
 func TestJudgeContractRejectsTrailingInput(t *testing.T) {
 	t.Parallel()
 

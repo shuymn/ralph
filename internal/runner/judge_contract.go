@@ -15,8 +15,11 @@ var (
 	errJudgeNewFindingsRequired    = errors.New("judge contract new_findings is required")
 	errJudgeNewFindingKeysRequired = errors.New("judge contract new_finding_keys is required")
 	errJudgeNewFindingsNegative    = errors.New("judge contract new_findings must be >= 0")
-	errJudgeTrailingJSONValue      = errors.New("judge contract has unexpected trailing json value")
-	errJudgeTrailingContent        = errors.New("judge contract has unexpected trailing content")
+	errJudgeFindingsCountMismatch  = errors.New(
+		"judge contract new_findings must match len(new_finding_keys)",
+	)
+	errJudgeTrailingJSONValue = errors.New("judge contract has unexpected trailing json value")
+	errJudgeTrailingContent   = errors.New("judge contract has unexpected trailing content")
 )
 
 type judgeContract struct {
@@ -70,10 +73,28 @@ func parseJudgeContract(path string) (judgeContract, error) {
 	if payload.NewFindingKeys == nil {
 		return judgeContract{}, errJudgeNewFindingKeysRequired
 	}
+	if err := validateJudgeFindingConsistency(
+		*payload.NewFindings,
+		*payload.NewFindingKeys,
+	); err != nil {
+		return judgeContract{}, err
+	}
 
 	return judgeContract{
 		Signal:         *payload.Signal,
 		NewFindings:    *payload.NewFindings,
 		NewFindingKeys: append([]string(nil), (*payload.NewFindingKeys)...),
 	}, nil
+}
+
+func validateJudgeFindingConsistency(newFindings int, newFindingKeys []string) error {
+	if newFindings != len(newFindingKeys) {
+		return fmt.Errorf(
+			"%w: new_findings=%d new_finding_keys=%d",
+			errJudgeFindingsCountMismatch,
+			newFindings,
+			len(newFindingKeys),
+		)
+	}
+	return nil
 }

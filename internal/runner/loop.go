@@ -502,7 +502,9 @@ func completeReviewIteration(
 	if err != nil {
 		return noExitCode, fmt.Errorf("parse judge contract: %w", err)
 	}
-	runtime.completion.recordJudge(judgeResult)
+	if err := runtime.completion.recordJudge(judgeResult); err != nil {
+		return noExitCode, fmt.Errorf("record judge contract: %w", err)
+	}
 	if runtime.completion.converged(runtime.state.reviewCount) {
 		return 0, nil
 	}
