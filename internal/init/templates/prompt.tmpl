@@ -26,6 +26,9 @@ Resolve the implementation plan file as follows:
 - Implement exactly ONE story per turn.
 - Use TDD (`RED -> GREEN -> REFACTOR`).
 - RED must compile and run: a compilation error is not RED. Add minimal scaffolding so the test executes and fails at runtime (for example, a failing assertion or an intentional unimplemented path).
+- When tool/sandbox constraints require repository-local output paths via environment variables, keep unintended generated artifacts out of commits.
+- If such artifacts are under the repository and not ignored yet, add ignore rules (`.gitignore` for team-shared noise, `.git/info/exclude` for machine-local noise) in the same turn.
+- Remove transient artifacts that should not persist after commands finish.
 - Do NOT run `git commit`. Write only the commit message text to `.ralph/.commit-msg`.
 - Keep changes scoped to the selected story. Do not start another story in the same turn.
 
@@ -35,6 +38,7 @@ Run required quality gates before finishing the turn.
 - Prefer commands explicitly listed in `AGENTS.md` and the selected plan task.
 - If both exist, run all required commands from both.
 - Format, lint, and tests must all pass before writing `.ralph/.commit-msg`.
+- Verify `git status --short` contains only intended story changes before finishing.
 - Fix root causes; do not bypass warnings or relax checks.
 
 ## Task Selection Algorithm
