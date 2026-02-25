@@ -112,6 +112,56 @@ func TestRunUsesPromptRunPath(t *testing.T) {
 	}
 }
 
+func TestRunRequiresNonEmptyPromptRun(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		prompt string
+	}{
+		{
+			name:   "empty prompt.run",
+			prompt: "",
+		},
+		{
+			name:   "whitespace-only prompt.run",
+			prompt: " \n\t ",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			root, tmpDir := setupWorkspace(
+				t,
+				`{"branchName":"main","stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
+				tc.prompt,
+			)
+			cfg := testConfig("printf '"+ralphconfig.DefaultCompletionSignal+"\\n'", nil, nil)
+
+			var stderr bytes.Buffer
+			code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+				WorkingDir: root,
+				Stdout:     io.Discard,
+				Stderr:     &stderr,
+				TempDir:    tmpDir,
+				Sleep:      func(time.Duration) {},
+				Mode:       ralphrunner.ModeRun,
+			})
+			if code != ralphrunner.ExitCodeRuntime {
+				t.Fatalf("expected runtime exit code %d, got %d", ralphrunner.ExitCodeRuntime, code)
+			}
+			if !strings.Contains(stderr.String(), "prompt file must not be empty") {
+				t.Fatalf("expected empty prompt error, got: %q", stderr.String())
+			}
+			if !strings.Contains(stderr.String(), "prompt.run.md") {
+				t.Fatalf("expected prompt path in error, got: %q", stderr.String())
+			}
+		})
+	}
+}
+
 func TestReviewRequiresPromptFiles(t *testing.T) {
 	t.Parallel()
 
@@ -179,6 +229,68 @@ func TestReviewRequiresPromptFiles(t *testing.T) {
 				t.Fatalf(
 					"expected missing prompt error for %s, got: %q",
 					tc.missingPromptSubstr,
+					stderr.String(),
+				)
+			}
+		})
+	}
+}
+
+func TestReviewRequiresNonEmptyPromptFiles(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name              string
+		reviewPrompt      string
+		judgePrompt       string
+		emptyPromptSubstr string
+	}{
+		{
+			name:              "empty review prompt",
+			reviewPrompt:      "",
+			judgePrompt:       "judge prompt\n",
+			emptyPromptSubstr: "prompt.review.md",
+		},
+		{
+			name:              "empty judge prompt",
+			reviewPrompt:      "review prompt\n",
+			judgePrompt:       "\n\t ",
+			emptyPromptSubstr: "prompt.judge.md",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			root, tmpDir := setupWorkspace(
+				t,
+				`{"branchName":"main","stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
+				"run prompt\n",
+			)
+			writeFile(t, filepath.Join(root, ".ralph", "prompt.review.md"), tc.reviewPrompt)
+			writeFile(t, filepath.Join(root, ".ralph", "prompt.judge.md"), tc.judgePrompt)
+
+			cfg := testConfig("printf '"+ralphconfig.DefaultCompletionSignal+"\\n'", nil, nil)
+			var stderr bytes.Buffer
+			code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+				WorkingDir: root,
+				Stdout:     io.Discard,
+				Stderr:     &stderr,
+				TempDir:    tmpDir,
+				Sleep:      func(time.Duration) {},
+				Mode:       ralphrunner.ModeReview,
+			})
+			if code != ralphrunner.ExitCodeRuntime {
+				t.Fatalf("expected runtime exit code %d, got %d", ralphrunner.ExitCodeRuntime, code)
+			}
+			if !strings.Contains(stderr.String(), "prompt file must not be empty") {
+				t.Fatalf("expected empty prompt error, got: %q", stderr.String())
+			}
+			if !strings.Contains(stderr.String(), tc.emptyPromptSubstr) {
+				t.Fatalf(
+					"expected prompt path %q in error, got: %q",
+					tc.emptyPromptSubstr,
 					stderr.String(),
 				)
 			}
