@@ -42,3 +42,21 @@ Started: 2026-02-25
   - Gotchas encountered
     - Sandbox denies writes to default Go/golangci cache locations; quality gates require repo-local cache env overrides (`GOCACHE`, `GOMODCACHE`, `GOPATH`, `GOLANGCI_LINT_CACHE`).
 ---
+## [2026-02-25] - [task-3]: Introduce mode/role command and prompt resolution in runner
+- What was implemented
+  - Added mode/role-aware runner planning (`ModeRun`/`ModeReview`, `RoleRun`/`RoleReview`/`RoleJudge`) with prompt path selection for `.ralph/prompt.run.md`, `.ralph/prompt.review.md`, and `.ralph/prompt.judge.md`.
+  - Wired main-step execution through a role-aware plan object so prompt and command resolution are explicit at runtime.
+  - Added `internal/runner/mode_plan.go` for command fallback (`review_command`/`judge_command` -> `run_command`) plus prompt existence/non-empty validation.
+  - Added Task 3 runner tests for run prompt path usage, review prompt requirements, role fallback behavior, and run tail-match compatibility; refactored the prompt-missing cases into table-driven form.
+  - Resolved lint/root-cause issues in Task 3 files (static sentinel errors, exhaustive switch handling, and intentional shell execution annotation).
+- DoD verification results
+  - `go test ./internal/runner -run 'TestRunUsesPromptRunPath|TestReviewRequiresPromptFiles|TestRoleCommandFallback|TestRunTailMatchCompatibility'`: PASS
+  - `task fmt`: PASS
+  - `task lint`: PASS
+  - `task test`: PASS
+- Learnings:
+  - Patterns discovered
+    - Centralizing mode/role resolution into a dedicated plan object keeps loop orchestration stable while enabling role-specific command/prompt contracts.
+  - Gotchas encountered
+    - Repository-local Go module caches can contain read-only files; transient cache cleanup may require permission normalization before deletion in sandboxed runs.
+---
