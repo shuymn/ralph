@@ -133,3 +133,23 @@ Started: 2026-02-25
   - Gotchas encountered
     - Sandbox restrictions require a workspace-local `GOCACHE` for Go test/build commands.
 ---
+## [2026-02-25] - [task-8]: Close Remaining Coverage and Documentation Gaps
+- What was implemented
+  - Added direct config regression coverage `TestLoadBytesRejectsMissingRunCommand` for missing/blank `agent.run_command` cases.
+  - Added CLI wrapper regression coverage `TestRunWrapper` for `RunRun`, `RunRunDry`, `RunReview`, and `RunReviewDry` parse-error propagation/exit-code behavior.
+  - Added scaffold rerun regression coverage `TestScaffoldPreservesExistingPromptAndPRD` to lock prompt/prd non-overwrite behavior and skipped-file stderr reporting.
+  - Clarified README wording for `git.fallback_no_gpg_sign` by explicitly distinguishing scaffold example values from runtime defaults.
+- DoD verification results
+  - RED (expected fail): `GOCACHE=$(pwd)/.cache/go-build go test ./internal/config ./cmd/ralph ./internal/init -run 'TestLoadBytesRejectsMissingRunCommand|TestRunWrapper|TestScaffoldPreservesExistingPromptAndPRD|TestReadmeClarifiesFallbackNoGPGSignDefaultAndScaffoldSample'` -> FAIL (`README.md must include "default when omitted"`).
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build go test ./internal/config ./cmd/ralph ./internal/init -run 'TestLoadBytesRejectsMissingRunCommand|TestRunWrapper|TestScaffoldPreservesExistingPromptAndPRD|TestReadmeClarifiesFallbackNoGPGSignDefaultAndScaffoldSample'`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build go test ./internal/config/... ./cmd/ralph/... ./internal/init/... && rg -n "default when omitted|scaffold sample" README.md`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task fmt`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build GOLANGCI_LINT_CACHE=$(pwd)/.cache/golangci-lint task lint`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task test`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task build`
+- Learnings:
+  - Patterns discovered
+    - For scaffold rerun protections, assert both file-content preservation and skipped-path stderr markers to keep overwrite guarantees explicit.
+  - Gotchas encountered
+    - README default semantics checks were brittle until wording explicitly separated scaffold example values from omission defaults.
+---

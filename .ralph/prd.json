@@ -64,7 +64,7 @@
         "task-4",
         "task-5"
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }
