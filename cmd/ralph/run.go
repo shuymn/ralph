@@ -13,6 +13,11 @@ import (
 	ralphrunner "github.com/shuymn/ralph/internal/runner"
 )
 
+const (
+	commandRun    = "run"
+	commandReview = "review"
+)
+
 func RunRun(root string, stdout, stderr io.Writer) int {
 	return runRun(root, stdout, stderr, false)
 }
@@ -22,11 +27,24 @@ func RunRunDry(root string, stdout, stderr io.Writer) int {
 }
 
 func runRun(root string, stdout, stderr io.Writer, dryRun bool) int {
+	return runCommand(root, stdout, stderr, commandRun, dryRun)
+}
+
+func runCommand(root string, stdout, stderr io.Writer, command string, dryRun bool) int {
 	configPath := filepath.Join(root, ".ralph", "config.yml")
 	cfg, err := ralphconfig.Load(configPath)
 	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "ralph run failed: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "ralph %s failed: %v\n", command, err)
 		return errorExitCode(err, 1)
+	}
+	if command == commandReview &&
+		cfg.Completion.Review.Strategy != ralphconfig.DefaultReviewCompletionStrategy {
+		_, _ = fmt.Fprintf(
+			stderr,
+			"ralph review failed: completion.review.strategy must be %s\n",
+			ralphconfig.DefaultReviewCompletionStrategy,
+		)
+		return ralphconfig.ExitCodeValidation
 	}
 
 	if dryRun {
