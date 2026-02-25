@@ -102,16 +102,17 @@ CLI は `ralph init`（雛形初期化）と `ralph run`（ループ実行）の
 6. runner が `phases.post.steps`（fmt/lint/test/commit など）を `if` と `on_fail` ルールで実行する。
    - main が失敗した場合でも post phase は実行する（post phase 開始時は `success()=false`, `failure()=true`）。
 7. `uses: auto_commit` step が有効な場合、`git.commit` に応じて commit する。
-   - `split`: 第1 commit は `git add -A .ralph/` で `.ralph/` 配下のみを stage して作成する（untracked を含む）。
-   - `split`: 第1 commit 用の staged 差分が空なら `.ralph/` commit は no-op で skip する（失敗にしない）。
-   - `split`: 第1 commit を作成する場合のみ `.ralph/` commit message は `chore(ralph): mark ${task_id} complete in PRD and progress` を使う。
-   - `split` の `${task_id}` は第1 commit を作成する場合のみ、before snapshot と現在の `.ralph/prd.json` を比較して `passes: false -> true` へ遷移した story ID から決定する。候補が 1 件のときのみ採用し、0 件または 2 件以上なら auto_commit を失敗として扱う。
-   - `split`: 第2 commit は `git add -A` で全変更を stage した後、`git restore --staged .ralph/` で `.ralph/` を index から外して `.ralph/` 以外のみを commit する。
-   - `split`: 第2 commit 用の staged 差分が空なら no-op で skip する（`.ralph/` のみ変更された iteration でも失敗させない）。
-   - `split`: 第2 commit の message は `.ralph/.commit-msg` が空でなければファイル全体（複数行可）を使い、空なら `git.fallback_message`（デフォルト: `feat: implement task (auto-commit)`）を使う。
-   - `together`: `git add -A` で変更全体（untracked を含む）を stage して 1 commit する。message は `.ralph/.commit-msg` が空でなければファイル全体（複数行可）を使い、空なら `git.fallback_message` を使う。`${task_id}` 抽出は行わない。
+   - `split`: `.ralph/.commit-msg` が空でなければファイル全体（複数行可）を commit message として取得し、空なら `git.fallback_message`（デフォルト: `feat: implement task (auto-commit)`）を使う。
+   - `split`: 第1 commit は `git add -A` で全変更を stage した後、`git restore --staged .ralph/` で `.ralph/` を index から外し、`.ralph/` 以外のみを commit する。
+   - `split`: 第1 commit 用の staged 差分が空なら no-op で skip する（失敗にしない）。
+   - `split`: 第2 commit は `git add -A .ralph/` で `.ralph/` 配下を stage し、`git restore --staged .ralph/.commit-msg` で `.commit-msg` を除外してから commit する。
+   - `split`: 第2 commit 用の staged 差分が空なら no-op で skip する（失敗にしない）。
+   - `split`: 第2 commit を作成する場合のみ `.ralph/` commit message は `chore(ralph): mark ${task_id} complete in PRD and progress` を使う。
+   - `split` の `${task_id}` は第2 commit を作成する場合のみ、before snapshot と現在の `.ralph/prd.json` を比較して `passes: false -> true` へ遷移した story ID から決定する。候補が 1 件のときのみ採用し、0 件または 2 件以上なら auto_commit を失敗として扱う。
+   - `together`: `git add -A` で変更全体（untracked を含む）を stage した後、`git restore --staged .ralph/.commit-msg` で `.commit-msg` を除外し、1 commit する。message は `.ralph/.commit-msg` が空でなければファイル全体（複数行可）を使い、空なら `git.fallback_message` を使う。`${task_id}` 抽出は行わない。
    - `together`: staged 差分が空なら no-op で skip する（失敗にしない）。
    - `.ralph/.commit-msg` の「空」は「ファイルが存在しない」または「`strings.TrimSpace(content) == \"\"`」を指す。非空時は trim 前のファイル全体を commit message として使う。
+   - auto_commit が成功または no-op で終了した場合、`.ralph/.commit-msg` は削除する（未存在は許容）。
 8. 完了判定を評価する。
    - main が成功した iteration のみ completion 判定を実行する。main が失敗した iteration では completion 判定をスキップし、未完了として扱う。
    - `completion.strategy=tail_match`: 「全 stories が `passes=true`」かつ「agent 出力末尾 `completion.tail_lines` 行のいずれか 1 行が `completion.signal` と完全一致」の両方を満たしたとき complete。
@@ -220,8 +221,10 @@ v1 のデフォルト値は以下。
 - `project` は config 項目として持たない（project 識別は `prd.json` 側で扱う）。
 - `paths` は config 項目として持たず、`.ralph/prompt.md` / `.ralph/prd.json` / `.ralph/progress.md` / `.ralph/.commit-msg` に固定する。
 - `git.commit` は `split` / `together` の 2 値のみとし、commit grouping 方針だけを設定する。
-- `git.commit=split` の `.ralph/` commit message は `chore(ralph): mark ${task_id} complete in PRD and progress` で固定し、`${task_id}` は `prd.json` before/after 差分（`passes: false -> true`）から 1 件だけ抽出して決定する。
+- `git.commit=split` は「非`.ralph/` commit を先に作成し、その後 `.ralph/` commit を作成する」順序とし、`.ralph/.commit-msg` はどちらの commit にも含めない。
 - `.ralph/` 以外の commit message は `.ralph/.commit-msg`（ファイル全体、複数行可）を優先し、空の場合は `git.fallback_message`（デフォルト: `feat: implement task (auto-commit)`）を使う。
+- `git.commit=split` の `.ralph/` commit message は `chore(ralph): mark ${task_id} complete in PRD and progress` で固定し、`${task_id}` は `prd.json` before/after 差分（`passes: false -> true`）から 1 件だけ抽出して決定する。
+- auto_commit が成功または no-op で終了した場合、`.ralph/.commit-msg` は削除して持ち越さない。
 - `.ralph/config.yml` の先頭非空行に `yaml-language-server` の `$schema` URL を埋め込み、JSON Schema をリモート参照する。
 
 ### Runner Execution Model
@@ -337,11 +340,11 @@ step の `run` コマンドは `os/exec` で `sh -c "<command>"` として実行
 - fixed main は `sh -c "<agent.command>"` で起動し、`.ralph/prompt.md` は stdin で渡す（引数で prompt path は渡さない）。
 - fixed main の成功は exit code `0`、失敗は non-zero 終了・シグナル終了・起動失敗として扱う。
 - main が失敗しても post phase は実行される。completion 判定は main 成功 iteration だけで実行し、main 失敗 iteration は未完了として次 iteration へ進む（post で `stop_loop` が発生した場合は exit 20）。
-- `git.commit=together` では `${task_id}` 抽出を行わない。commit message は `.ralph/.commit-msg` または `git.fallback_message` のみで決定する。
-- `git.commit=split` では `git add -A .ralph/`（第1 commit）と `git add -A` + `git restore --staged .ralph/`（第2 commit）で staging を分離し、各 commit の staged 差分が空なら no-op で skip する。
+- `git.commit=together` では `${task_id}` 抽出を行わない。commit message は `.ralph/.commit-msg` または `git.fallback_message` のみで決定し、staging 時に `.ralph/.commit-msg` を除外する。
+- `git.commit=split` では `git add -A` + `git restore --staged .ralph/`（第1 commit: 非`.ralph/`）と `git add -A .ralph/` + `git restore --staged .ralph/.commit-msg`（第2 commit: `.ralph/`）で staging を分離し、各 commit の staged 差分が空なら no-op で skip する。
 - auto_commit の staging は `git add -A` 相当を前提とし、untracked files を含む。`git add -A` が取り込むファイルサイズ/種別への追加ガードは v1 では提供しない（`.gitignore` と運用で制御する）。
 - auto_commit は最終的な staged 差分が空の場合に no-op success として扱い、`git commit` エラーにしない。
-- `.ralph/.commit-msg` の「空」は「ファイル欠如」または「trim 後空文字列」で判定する。非空時は trim 前のファイル全体（複数行可）を commit message として使う。
+- `.ralph/.commit-msg` の「空」は「ファイル欠如」または「trim 後空文字列」で判定する。非空時は trim 前のファイル全体（複数行可）を commit message として使う。auto_commit が成功または no-op で終了した場合は `.ralph/.commit-msg` を削除する。
 - `ralph run --dry-run`: 実行計画を標準出力へ出力し、実際のコマンド実行は行わない。出力には以下を含む:
   - agent command と max_iterations / sleep_seconds
   - pre/post steps の一覧（各 step の `name`, `run` or `uses`, `if`, `on_fail`）
@@ -357,9 +360,9 @@ step の `run` コマンドは `os/exec` で `sh -c "<command>"` として実行
 - step の `on_fail` 未指定時は `stop_loop` として扱う。
 - step の `name` は必須で、空値または同一 phase 内重複は config validation error（exit code 22）とする。
 - `uses: auto_commit` は Go 内部で `git` コマンドを `os/exec` 経由で実行する。
-- `git.commit=split` では `.ralph/` とそれ以外を別 commit に分離し、`.ralph/` commit を作成する場合のみ `${task_id}` を `prd.json` の before/after snapshot 差分（`passes: false -> true`）から 1 件だけ抽出して決定する。
+- `git.commit=split` では 非`.ralph/` commit を先に作成し、その後 `.ralph/` commit を作成する。`.ralph/` commit を作成する場合のみ `${task_id}` を `prd.json` の before/after snapshot 差分（`passes: false -> true`）から 1 件だけ抽出して決定する。
 - before snapshot はメモリ上に保持する（tmpfile や `.ralph/` 配下へのファイル書き出しは行わない）。
-- `.commit-msg` が非空の場合（空判定は「ファイル欠如または trim 後空文字列」）、commit message はファイル全体（subject + body）を使用する。
+- `.commit-msg` が非空の場合（空判定は「ファイル欠如または trim 後空文字列」）、commit message はファイル全体（subject + body）を使用する。`.commit-msg` は auto_commit commit の対象に含めず、auto_commit 成功/no-op 後に削除する。
 - fixed main の agent 出力（stdout）は tmpfile（`os.CreateTemp`）へ保存し、completion 判定は tmpfile の tail のみを参照する。`tail_match` の signal 判定は「tail 内の 1 行が `completion.signal` と完全一致したか」で行う。tmpfile は iteration ごとに削除する。
 - `completion.signal` をデフォルトから変更した場合は、`.ralph/prompt.md` の Stop Condition literal も同じ文字列へ合わせる。`ralph run --dry-run` 出力に `completion.signal` を含め、実行前にズレを検知できるようにする。
 - `phases.main` は設定項目として提供しない（固定 main のため）。
@@ -417,7 +420,7 @@ Mitigation: completion 判定後に毎 iteration 削除し、exit `20/21/22/23` 
 10. completion signal の不整合: `completion.signal` だけ変更して `.ralph/prompt.md` の Stop Condition literal を更新しないと complete 判定が成立しない。
 Mitigation: `completion.signal` を変更する場合は prompt 側 literal も同時に更新する。`ralph run --dry-run` に signal を表示し、実行前確認を必須運用にする。
 11. auto_commit の過剰 staging: `git add -A` により意図しない大容量ファイルや補助生成物が commit 対象に入るリスクがある。
-Mitigation: v1 では file-size/type ガードを持たない。`.gitignore` とレビュー運用で制御する。
+Mitigation: `.ralph/.commit-msg` は staging から常に除外し、処理後に削除する。その他の生成物については v1 では file-size/type ガードを持たないため、`.gitignore` とレビュー運用で制御する。
 12. `deps` グラフ不整合: `deps` に循環や未定義参照があっても runner が検出しないため、agent のタスク選択が停滞するリスクがある。
 Mitigation: `deps` の意味論チェック（循環・参照整合）は agent/human の運用責務とし、必要なら将来バリデータを検討する。
 13. agent プロセスのハング: agent command が応答しなくなると iteration が停止する。
@@ -463,13 +466,15 @@ Mitigation: v1 では OS レベルの timeout（`timeout` コマンドを `agent
   - [Phase 2 gate] before snapshot テスト（iteration 開始時にメモリ上に保持すること）
   - [Phase 2 gate] `stories` 検証テスト（`stories: []`、`id` 空文字、`id` 重複、`passes` 非 bool、`deps` 非 `[]string` を loop 開始前に exit code 22 で拒否すること）
   - [Phase 2 gate] `task_id` 抽出テスト（before/after diff から `passes: false -> true` を検出し、`0/1/2+` 件を判定できること）
-  - [Phase 2 gate] `git.commit=split` commit 分離テスト（`.ralph/` と非`.ralph/` が別 commit になること）
-  - [Phase 2 gate] `git.commit=split` staging テスト（第1 commit が `git add -A .ralph/` 相当、第2 commit が `git add -A` + `git restore --staged .ralph/` 相当であること）
+  - [Phase 2 gate] `git.commit=split` commit 分離テスト（非`.ralph/` commit が先、`.ralph/` commit が後になること）
+  - [Phase 2 gate] `git.commit=split` staging テスト（第1 commit が `git add -A` + `git restore --staged .ralph/`、第2 commit が `git add -A .ralph/` + `git restore --staged .ralph/.commit-msg` 相当であること）
   - [Phase 2 gate] `git.commit=split` 空 commit 回避テスト（第1/第2 commit それぞれ staged 差分が空なら no-op skip し、`git commit` 失敗にならないこと）
-  - [Phase 2 gate] `git.commit=together` テスト（`${task_id}` 抽出を行わず、`.commit-msg` / `git.fallback_message` のみで commit message を決定すること）
+  - [Phase 2 gate] `git.commit=together` テスト（`${task_id}` 抽出を行わず、`.commit-msg` / `git.fallback_message` のみで commit message を決定し、`.commit-msg` を commit 対象から除外すること）
   - [Phase 2 gate] `git.commit=together` no-changes テスト（staged 差分が空なら no-op success になること）
   - [Phase 2 gate] untracked staging テスト（split/together ともに `git add -A` 相当で untracked files を取り込むこと）
   - [Phase 2 gate] `.ralph/` commit message テスト（`chore(ralph): mark ${task_id} complete in PRD and progress` 形式になること）
+  - [Phase 2 gate] `.commit-msg` 除外テスト（split/together ともに `.ralph/.commit-msg` が commit に含まれないこと）
+  - [Phase 2 gate] `.commit-msg` 削除テスト（auto_commit 成功/no-op 後に `.ralph/.commit-msg` が削除されること）
   - [Phase 2 gate] `.commit-msg` 空判定テスト（ファイル欠如・空文字・whitespace-only は空扱い、非空はファイル全体を使用すること）
   - [Phase 2 gate] 非`.ralph/` message デフォルトテスト（`.ralph/.commit-msg` 空時に `git.fallback_message` を使うこと）
   - [Phase 2 gate] 非`.ralph/` message 優先テスト（`.ralph/.commit-msg` 非空時にファイル全体を commit message として使うこと）
@@ -580,14 +585,15 @@ phases:
 | ADR | Decision | Status |
 | --- | --- | --- |
 | [0001](../adr/0001-go-runner-over-shell-generation.md) | Go runner が config.yml を直接読み取りタスクループを実行する（shell script 生成を廃止） | Accepted |
+| [0003](../adr/0003-exclude-commit-msg-from-auto-commit.md) | auto_commit では `.ralph/.commit-msg` を commit 対象から除外し、処理後に削除する | Accepted |
 | - | `if` は Go 内部 evaluator で評価し、`if` 未指定時は `success()` 相当、`steps.<name>.success` は v1 非対応とする | Accepted |
 | - | `config.yml` は GitHub raw URL の JSON Schema を参照する。schema 本体はリポジトリ管理物として提供し、`ralph init` は `.ralph/` 配下へ schema 実ファイルを生成しない | Accepted |
 | - | `project` / `paths` は config から外し、`git.commit` は `split` / `together` の 2 値に限定する | Accepted |
-| - | `git.commit=split` では `.ralph/` を先に commit し、`${task_id}` は `.ralph/` commit を作成する場合のみ `passes: false -> true` 差分から 1 件抽出する。各 commit の staged 差分が空なら no-op で skip する | Accepted |
-| - | `git.commit=together` では `${task_id}` 抽出を行わず、`.commit-msg` / `fallback_message` のみで commit message を決定する | Accepted |
+| - | `git.commit=split` では非`.ralph/` commit を先に作成し、次に `.ralph/` commit を作成する。`${task_id}` は `.ralph/` commit を作成する場合のみ `passes: false -> true` 差分から 1 件抽出する。各 commit の staged 差分が空なら no-op で skip する | Accepted |
+| - | `git.commit=together` では `${task_id}` 抽出を行わず、`.commit-msg` / `fallback_message` のみで commit message を決定する。`.commit-msg` は commit 対象から除外する | Accepted |
 | - | auto_commit の staging は split/together ともに `git add -A` 系を用い、untracked files を含む。v1 は file-size/type ガードを持たない | Accepted |
 | - | step `name` は必須（空値不可）かつ同一 phase 内で一意とし、違反は config validation error（exit code 22）とする | Accepted |
-| - | `.ralph/.commit-msg` の空判定は「ファイル欠如または trim 後空文字列」とし、非空時はファイル全体を commit message に使う | Accepted |
+| - | `.ralph/.commit-msg` の空判定は「ファイル欠如または trim 後空文字列」とし、非空時はファイル全体を commit message に使う。auto_commit 成功/no-op 後は `.ralph/.commit-msg` を削除する | Accepted |
 | - | `completion.strategy=tail_match` は main 成功 iteration でのみ評価し、「全 `passes=true`」かつ「tail 内の 1 行が `completion.signal` と完全一致」の AND で判定する | Accepted |
 | - | `prd.json` の `stories` は 1 件以上必須で、各 story の `id` 非空/一意、`passes` bool、`deps` `[]string` を満たさない場合は設定エラー（exit code 22）として loop 実行前に失敗させる | Accepted |
 | - | `config.version` は string `"1"` のみ受理し、未指定・未対応 version・型不一致（例: `1`）は設定エラー（exit code 22）とする | Accepted |
@@ -622,9 +628,9 @@ phases:
 9. `project` は `config.yml` の設定項目に存在しない。
 10. `paths` は `config.yml` の設定項目に存在せず、runner の参照 path は `.ralph/` 配下固定である。
 11. `git.commit` は `split`（`.ralph` とそれ以外を分割 commit）または `together`（1 commit）だけを受け付ける。
-12. `git.commit=split` では `.ralph/` を先に commit し、message は `chore(ralph): mark ${task_id} complete in PRD and progress` を使う（`.ralph/` staged 差分が空なら no-op skip する）。
+12. `git.commit=split` では非`.ralph/` commit を先に作成し、次に `.ralph/` commit を作成する。`.ralph/` commit では `.ralph/.commit-msg` を除外し、message は `chore(ralph): mark ${task_id} complete in PRD and progress` を使う（各 staged 差分が空なら no-op skip する）。
 13. `git.commit=split` の `${task_id}` は `.ralph/` commit を作成する場合のみ `prd.json` before/after 差分で `passes: false -> true` になった story から 1 件のみ抽出して決定し、0 件または 2 件以上は auto_commit 失敗とする。
-14. 非`.ralph/` の commit message は `.ralph/.commit-msg` 優先とし、非空時はファイル全体（複数行可）を使用する。空なら `git.fallback_message`（デフォルト: `feat: implement task (auto-commit)`）を使う。
+14. 非`.ralph/` の commit message は `.ralph/.commit-msg` 優先とし、非空時はファイル全体（複数行可）を使用する。空なら `git.fallback_message`（デフォルト: `feat: implement task (auto-commit)`）を使う。`.ralph/.commit-msg` は auto_commit 成功/no-op 後に削除する。
 15. `.ralph/prompt.md` は固定 1 枚で運用される。
 16. `.ralph/progress.md` の `Started:` は `ralph init` 実行日の `YYYY-MM-DD` で埋め込まれる。
 17. `if` 式は Go 内部 evaluator で評価され、`ralph run` / `ralph run --dry-run` の config load 時に parse/validation が完了する。
@@ -651,14 +657,14 @@ phases:
 38. main が失敗しても post phase は実行され、post 開始時の評価コンテキストは `success()=false`, `failure()=true` になる。
 39. main 失敗後も post phase は実行されるが、当該 iteration の completion 判定はスキップされる。`stop_loop` がなければ未完了として次 iteration へ進む。
 40. agent output tmpfile は iteration ごとに作成され、completion 判定後に削除される。exit `20/21/22/23` と SIGINT/SIGTERM の終了経路でも作成済み tmpfile は best-effort で削除される。
-41. `git.commit=together` では `${task_id}` 抽出を行わず、commit message は `.ralph/.commit-msg` または `git.fallback_message` のみで決定される。
+41. `git.commit=together` では `${task_id}` 抽出を行わず、commit message は `.ralph/.commit-msg` または `git.fallback_message` のみで決定される。staging 時に `.ralph/.commit-msg` は除外される。
 42. `config.version` は string `"1"` のみ受理し、未指定・未対応 version・型不一致（例: `1`）は validation error（exit code 22）として扱われる。
 43. auto_commit の staging は split/together ともに `git add -A` 相当を用い、untracked files を含む。v1 では file-size/type ガードを提供せず、staged 差分が空の場合は no-op success とする。
 44. runner は `deps` を `[]string` 型としてのみ検証し、dependency graph（循環/順序/未定義参照）は検証しない。`deps` に基づくタスク選択は agent 側責務である。
 45. runner は `prd.json` の `stories`（`id` / `passes` / `deps`）を必須参照し、`id` 非空/一意・`passes` bool・`deps` `[]string` を検証する。`project` / `plan` と unknown top-level fields は許容する。
 46. `completion.signal` を変更した場合、`.ralph/prompt.md` の Stop Condition literal も同じ文字列へ更新する。`--dry-run` 出力で signal 設定を確認できる。
 47. step `name` は必須で、空値不可・同一 phase 内重複不可とし、違反は config validation error（exit code 22）として扱われる。
-48. `.ralph/.commit-msg` の空判定は「ファイル欠如または trim 後空文字列」とし、非空時は trim 前のファイル全体を commit message として使用する。
+48. `.ralph/.commit-msg` の空判定は「ファイル欠如または trim 後空文字列」とし、非空時は trim 前のファイル全体を commit message として使用する。auto_commit 成功/no-op 後は `.ralph/.commit-msg` を削除する。
 49. `changed()` 評価時に `git status --porcelain` の実行が失敗した場合は `if` expression error とし、runner は exit code `22` で終了する。
 50. `ralph init` のテンプレート適用は `config.yml` / `prompt.md` / `prd.json` が verbatim copy、`progress.md` のみ `text/template` 展開である。
 51. pre phase で `on_fail=stop_loop` が発生した場合、当該 iteration の main/post は実行されない。
