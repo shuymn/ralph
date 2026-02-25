@@ -35,7 +35,10 @@ const (
 	commitMessageFileName = ".commit-msg"
 )
 
-var errUnsupportedUsesStep = errors.New("unsupported uses step")
+var (
+	errUnsupportedUsesStep      = errors.New("unsupported uses step")
+	errJudgeArtifactPathMissing = errors.New("judge artifact path must not be empty")
+)
 
 type Options struct {
 	WorkingDir string
@@ -83,9 +86,10 @@ type phaseResult struct {
 }
 
 type reviewRuntime struct {
-	state     reviewState
-	config    ralphconfig.ReviewConvergenceMode
-	artifacts reviewArtifacts
+	state      reviewState
+	config     ralphconfig.ReviewConvergenceMode
+	artifacts  reviewArtifacts
+	completion reviewCompletion
 }
 
 func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
@@ -106,7 +110,7 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 	if enableReviewScheduler {
 		runtime := newReviewRuntime(
 			paths,
-			cfg.Completion.Review.ReviewConvergence,
+			cfg.Completion.Review,
 			time.Now(),
 		)
 		reviewRuntimeState = &runtime
@@ -197,6 +201,7 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			logRuntimeError(opts.Stderr, err)
 			return ExitCodeRuntime
 		}
+		reviewArtifactPath := ""
 		if reviewRuntimeState != nil {
 			artifactPath, err := reviewRuntimeState.artifacts.nextPath(
 				iterationPlan.Role,
@@ -215,6 +220,7 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 				logRuntimeError(opts.Stderr, err)
 				return ExitCodeRuntime
 			}
+			reviewArtifactPath = artifactPath
 			reviewRuntimeState.state.recordRole(iterationPlan.Role)
 		}
 
@@ -237,22 +243,20 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			return ExitCodeStopLoop
 		}
 
-		if reviewRuntimeState != nil {
-			tracker.cleanup(mainResult.OutputPath)
-		} else {
-			completionCode, err := completeIteration(
-				mainResult,
-				paths.PRD,
-				iterationPlan.Completion,
-				tracker,
-			)
-			if err != nil {
-				logRuntimeError(opts.Stderr, err)
-				return ExitCodeRuntime
-			}
-			if completionCode != noExitCode {
-				return completionCode
-			}
+		completionCode, err := completeModeIteration(
+			iterationPlan,
+			mainResult,
+			reviewArtifactPath,
+			reviewRuntimeState,
+			paths.PRD,
+			tracker,
+		)
+		if err != nil {
+			logRuntimeError(opts.Stderr, err)
+			return ExitCodeRuntime
+		}
+		if completionCode != noExitCode {
+			return completionCode
 		}
 
 		sleepDuration := time.Duration(plan.Agent.SleepSeconds) * time.Second
@@ -267,14 +271,15 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 
 func newReviewRuntime(
 	paths fixedPaths,
-	config ralphconfig.ReviewConvergenceMode,
+	profile ralphconfig.ReviewCompletionProfile,
 	now time.Time,
 ) reviewRuntime {
 	state := newReviewState(now)
 	return reviewRuntime{
-		state:     state,
-		config:    config,
-		artifacts: newReviewArtifacts(paths, state.runID),
+		state:      state,
+		config:     profile.ReviewConvergence,
+		artifacts:  newReviewArtifacts(paths, state.runID),
+		completion: newReviewCompletion(profile),
 	}
 }
 
@@ -437,6 +442,63 @@ func completeIteration(
 	}
 	if mismatch {
 		return ExitCodeCompletionMismatch, nil
+	}
+
+	return noExitCode, nil
+}
+
+func completeModeIteration(
+	iterationPlan modePlan,
+	mainResult mainResult,
+	reviewArtifactPath string,
+	reviewRuntimeState *reviewRuntime,
+	prdPath string,
+	tracker *tmpTracker,
+) (int, error) {
+	if reviewRuntimeState != nil {
+		return completeReviewIteration(
+			iterationPlan.Role,
+			reviewArtifactPath,
+			mainResult,
+			reviewRuntimeState,
+			tracker,
+		)
+	}
+
+	return completeIteration(
+		mainResult,
+		prdPath,
+		iterationPlan.Completion,
+		tracker,
+	)
+}
+
+func completeReviewIteration(
+	role Role,
+	artifactPath string,
+	mainResult mainResult,
+	runtime *reviewRuntime,
+	tracker *tmpTracker,
+) (int, error) {
+	defer tracker.cleanup(mainResult.OutputPath)
+
+	if role != RoleJudge {
+		return noExitCode, nil
+	}
+	if artifactPath == "" {
+		return noExitCode, errJudgeArtifactPathMissing
+	}
+
+	judgeResult, err := parseJudgeContract(artifactPath)
+	if err != nil {
+		return noExitCode, fmt.Errorf("parse judge contract: %w", err)
+	}
+	runtime.completion.recordJudge(judgeResult)
+	if runtime.completion.converged(runtime.state.reviewCount) {
+		return 0, nil
+	}
+	if runtime.completion.nonConvergedAtMax(runtime.state.reviewCount) {
+		return ExitCodeMaxIterations, nil
 	}
 
 	return noExitCode, nil

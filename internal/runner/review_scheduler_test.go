@@ -36,8 +36,12 @@ func TestReviewSchedulerRules(t *testing.T) {
 	roleLog := filepath.Join(root, ".ralph", "role.log")
 	cfg := testConfig(
 		fmt.Sprintf(
-			"input=$(cat); printf '%%s\\n' \"$input\" >> %s; printf 'iteration\\n'",
+			"input=$(cat); printf '%%s\\n' \"$input\" >> %s; "+
+				"if [ \"$input\" = %s ]; then "+
+				"printf '{\"signal\":\"continue\",\"new_findings\":1,\"new_finding_keys\":[\"A\"]}\\n'; "+
+				"else printf 'iteration\\n'; fi",
 			shQuote(roleLog),
+			shQuote(judgePromptMarker),
 		),
 		nil,
 		nil,
@@ -103,8 +107,12 @@ func TestReviewSchedulerMaxReviewsBoundary(t *testing.T) {
 	roleLog := filepath.Join(root, ".ralph", "role.log")
 	cfg := testConfig(
 		fmt.Sprintf(
-			"input=$(cat); printf '%%s\\n' \"$input\" >> %s; printf 'iteration\\n'",
+			"input=$(cat); printf '%%s\\n' \"$input\" >> %s; "+
+				"if [ \"$input\" = %s ]; then "+
+				"printf '{\"signal\":\"continue\",\"new_findings\":1,\"new_finding_keys\":[\"A\"]}\\n'; "+
+				"else printf 'iteration\\n'; fi",
 			shQuote(roleLog),
+			shQuote(judgePromptMarker),
 		),
 		nil,
 		nil,

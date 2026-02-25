@@ -442,6 +442,131 @@ func TestRunReturns23WhenMaxIterationsReached(t *testing.T) {
 	}
 }
 
+func TestReviewConvergenceStableRounds(t *testing.T) {
+	t.Parallel()
+
+	root, tmpDir := setupWorkspace(
+		t,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+		"prompt-run\n",
+	)
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.review.md"), "review output\n")
+	writeFile(
+		t,
+		filepath.Join(root, ".ralph", "prompt.judge.md"),
+		`{"signal":"READY","new_findings":0,"new_finding_keys":[]}`+"\n",
+	)
+
+	cfg := testConfig("cat", nil, nil)
+	cfg.Agent.Command = ""
+	cfg.Agent.MaxIterations = 6
+	cfg.Completion.Review.Signal = "READY"
+	cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{
+		MinReviews:   1,
+		MaxReviews:   3,
+		JudgeEvery:   1,
+		StableRounds: 2,
+	}
+
+	code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+		WorkingDir: root,
+		Stdout:     io.Discard,
+		Stderr:     io.Discard,
+		TempDir:    tmpDir,
+		Sleep:      func(time.Duration) {},
+		Mode:       ralphrunner.ModeReview,
+	})
+	if code != 0 {
+		t.Fatalf("expected convergence exit code 0, got %d", code)
+	}
+}
+
+func TestReviewNonConvergenceReturns23(t *testing.T) {
+	t.Parallel()
+
+	root, tmpDir := setupWorkspace(
+		t,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+		"prompt-run\n",
+	)
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.review.md"), "review output\n")
+	writeFile(
+		t,
+		filepath.Join(root, ".ralph", "prompt.judge.md"),
+		`{"signal":"READY","new_findings":1,"new_finding_keys":["F1"]}`+"\n",
+	)
+
+	cfg := testConfig("cat", nil, nil)
+	cfg.Agent.Command = ""
+	cfg.Agent.MaxIterations = 6
+	cfg.Completion.Review.Signal = "READY"
+	cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{
+		MinReviews:   1,
+		MaxReviews:   2,
+		JudgeEvery:   1,
+		StableRounds: 1,
+	}
+
+	code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+		WorkingDir: root,
+		Stdout:     io.Discard,
+		Stderr:     io.Discard,
+		TempDir:    tmpDir,
+		Sleep:      func(time.Duration) {},
+		Mode:       ralphrunner.ModeReview,
+	})
+	if code != ralphrunner.ExitCodeMaxIterations {
+		t.Fatalf(
+			"expected non-convergence exit code %d, got %d",
+			ralphrunner.ExitCodeMaxIterations,
+			code,
+		)
+	}
+}
+
+func TestReviewLogsRemainFreeForm(t *testing.T) {
+	t.Parallel()
+
+	root, tmpDir := setupWorkspace(
+		t,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+		"prompt-run\n",
+	)
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.review.md"), "review output\n")
+	writeFile(
+		t,
+		filepath.Join(root, ".ralph", "prompt.judge.md"),
+		`{"signal":"READY","new_findings":0,"new_finding_keys":[]}`+"\n",
+	)
+
+	cfg := testConfig("cat; printf 'free-form stderr line\\n' >&2", nil, nil)
+	cfg.Agent.Command = ""
+	cfg.Agent.MaxIterations = 4
+	cfg.Completion.Review.Signal = "READY"
+	cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{
+		MinReviews:   1,
+		MaxReviews:   2,
+		JudgeEvery:   1,
+		StableRounds: 1,
+	}
+
+	var stderr bytes.Buffer
+	code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+		WorkingDir: root,
+		Stdout:     io.Discard,
+		Stderr:     &stderr,
+		TempDir:    tmpDir,
+		Sleep:      func(time.Duration) {},
+		Mode:       ralphrunner.ModeReview,
+	})
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "free-form stderr line") {
+		t.Fatalf("expected free-form stderr to be preserved, got %q", stderr.String())
+	}
+}
+
 func TestRunSwitchesToBranchFromPRD(t *testing.T) {
 	t.Parallel()
 
