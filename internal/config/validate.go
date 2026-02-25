@@ -145,13 +145,18 @@ func applyDefaults(cfg *Config) {
 	if cfg.Completion.Review.Signal == "" {
 		cfg.Completion.Review.Signal = DefaultCompletionSignal
 	}
-	if cfg.Completion.Review.ReviewConvergence == (ReviewConvergenceMode{}) {
-		cfg.Completion.Review.ReviewConvergence = ReviewConvergenceMode{
-			MinReviews:   DefaultReviewMinReviews,
-			MaxReviews:   DefaultReviewMaxReviews,
-			JudgeEvery:   DefaultReviewJudgeEvery,
-			StableRounds: DefaultReviewStableRounds,
-		}
+	review := &cfg.Completion.Review.ReviewConvergence
+	if review.MinReviews == 0 {
+		review.MinReviews = DefaultReviewMinReviews
+	}
+	if review.MaxReviews == 0 {
+		review.MaxReviews = DefaultReviewMaxReviews
+	}
+	if review.JudgeEvery == 0 {
+		review.JudgeEvery = DefaultReviewJudgeEvery
+	}
+	if review.StableRounds == 0 {
+		review.StableRounds = DefaultReviewStableRounds
 	}
 
 	if strings.TrimSpace(cfg.Git.Commit) == "" {

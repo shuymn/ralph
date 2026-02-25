@@ -350,6 +350,122 @@ completion:
 	assertErrorContains(t, err, "completion.review.strategy must be review_convergence")
 }
 
+func TestLoadBytesAppliesReviewConvergencePartialDefaults(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name              string
+		reviewConvergence string
+		wantMinReviews    int
+		wantMaxReviews    int
+		wantJudgeEvery    int
+		wantStableRounds  int
+	}{
+		{
+			name: "min_reviews only",
+			reviewConvergence: `
+      min_reviews: 4
+`,
+			wantMinReviews:   4,
+			wantMaxReviews:   ralphconfig.DefaultReviewMaxReviews,
+			wantJudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
+			wantStableRounds: ralphconfig.DefaultReviewStableRounds,
+		},
+		{
+			name: "max_reviews only",
+			reviewConvergence: `
+      max_reviews: 12
+`,
+			wantMinReviews:   ralphconfig.DefaultReviewMinReviews,
+			wantMaxReviews:   12,
+			wantJudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
+			wantStableRounds: ralphconfig.DefaultReviewStableRounds,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assertReviewConvergenceValues(
+				t,
+				tc.reviewConvergence,
+				tc.wantMinReviews,
+				tc.wantMaxReviews,
+				tc.wantJudgeEvery,
+				tc.wantStableRounds,
+			)
+		})
+	}
+}
+
+func TestLoadBytesReviewConvergenceSingleFieldOverrides(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name              string
+		reviewConvergence string
+		wantMinReviews    int
+		wantMaxReviews    int
+		wantJudgeEvery    int
+		wantStableRounds  int
+	}{
+		{
+			name: "overrides min_reviews only",
+			reviewConvergence: `
+      min_reviews: 4
+`,
+			wantMinReviews:   4,
+			wantMaxReviews:   ralphconfig.DefaultReviewMaxReviews,
+			wantJudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
+			wantStableRounds: ralphconfig.DefaultReviewStableRounds,
+		},
+		{
+			name: "overrides max_reviews only",
+			reviewConvergence: `
+      max_reviews: 12
+`,
+			wantMinReviews:   ralphconfig.DefaultReviewMinReviews,
+			wantMaxReviews:   12,
+			wantJudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
+			wantStableRounds: ralphconfig.DefaultReviewStableRounds,
+		},
+		{
+			name: "overrides judge_every only",
+			reviewConvergence: `
+      judge_every: 3
+`,
+			wantMinReviews:   ralphconfig.DefaultReviewMinReviews,
+			wantMaxReviews:   ralphconfig.DefaultReviewMaxReviews,
+			wantJudgeEvery:   3,
+			wantStableRounds: ralphconfig.DefaultReviewStableRounds,
+		},
+		{
+			name: "overrides stable_rounds only",
+			reviewConvergence: `
+      stable_rounds: 4
+`,
+			wantMinReviews:   ralphconfig.DefaultReviewMinReviews,
+			wantMaxReviews:   ralphconfig.DefaultReviewMaxReviews,
+			wantJudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
+			wantStableRounds: 4,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assertReviewConvergenceValues(
+				t,
+				tc.reviewConvergence,
+				tc.wantMinReviews,
+				tc.wantMaxReviews,
+				tc.wantJudgeEvery,
+				tc.wantStableRounds,
+			)
+		})
+	}
+}
+
 func TestLoadBytesRejectsInvalidReviewConvergenceBounds(t *testing.T) {
 	t.Parallel()
 
@@ -370,7 +486,7 @@ completion:
   review:
     strategy: review_convergence
     review_convergence:
-      min_reviews: 0
+      min_reviews: -1
       max_reviews: 10
       judge_every: 2
       stable_rounds: 2
@@ -410,7 +526,7 @@ completion:
     review_convergence:
       min_reviews: 3
       max_reviews: 10
-      judge_every: 0
+      judge_every: -1
       stable_rounds: 2
 `,
 			wantErr: "completion.review.review_convergence.judge_every must be >= 1",
@@ -430,7 +546,7 @@ completion:
       min_reviews: 3
       max_reviews: 10
       judge_every: 2
-      stable_rounds: 0
+      stable_rounds: -1
 `,
 			wantErr: "completion.review.review_convergence.stable_rounds must be >= 1",
 		},
@@ -442,6 +558,48 @@ completion:
 			_, err := ralphconfig.LoadBytes([]byte(tc.yaml))
 			assertErrorContains(t, err, tc.wantErr)
 		})
+	}
+}
+
+func assertReviewConvergenceValues(
+	t *testing.T,
+	reviewConvergence string,
+	wantMinReviews int,
+	wantMaxReviews int,
+	wantJudgeEvery int,
+	wantStableRounds int,
+) {
+	t.Helper()
+
+	content := `
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  run:
+    strategy: tail_match
+  review:
+    strategy: review_convergence
+    review_convergence:
+` + reviewConvergence
+
+	cfg, err := ralphconfig.LoadBytes([]byte(content))
+	if err != nil {
+		t.Fatalf("LoadBytes returned error: %v", err)
+	}
+
+	got := cfg.Completion.Review.ReviewConvergence
+	if got.MinReviews != wantMinReviews {
+		t.Fatalf("min_reviews=%d, want %d", got.MinReviews, wantMinReviews)
+	}
+	if got.MaxReviews != wantMaxReviews {
+		t.Fatalf("max_reviews=%d, want %d", got.MaxReviews, wantMaxReviews)
+	}
+	if got.JudgeEvery != wantJudgeEvery {
+		t.Fatalf("judge_every=%d, want %d", got.JudgeEvery, wantJudgeEvery)
+	}
+	if got.StableRounds != wantStableRounds {
+		t.Fatalf("stable_rounds=%d, want %d", got.StableRounds, wantStableRounds)
 	}
 }
 
