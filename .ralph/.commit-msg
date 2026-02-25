@@ -1,1 +1,1 @@
-feat(init): bootstrap ralph init scaffolding
+feat(config): add config and prd load-time validation
