@@ -1,6 +1,7 @@
 package ralphrunner
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,7 +37,9 @@ func parseJudgeContract(path string) (judgeContract, error) {
 	}
 
 	var payload judgeContractPayload
-	if err := json.Unmarshal(content, &payload); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(content))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&payload); err != nil {
 		return judgeContract{}, fmt.Errorf("decode judge artifact json: %w", err)
 	}
 	if payload.Signal == nil || strings.TrimSpace(*payload.Signal) == "" {
