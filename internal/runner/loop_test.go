@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,7 +21,7 @@ func TestRunExecutesPreMainPostInOrder(t *testing.T) {
 
 	root, tmpDir := setupWorkspace(
 		t,
-		`{"stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
 		"prompt-line\n",
 	)
 
@@ -75,7 +76,7 @@ func TestRunLogsStopLoopAndReturns20(t *testing.T) {
 
 	root, tmpDir := setupWorkspace(
 		t,
-		`{"stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
 		"prompt\n",
 	)
 
@@ -107,7 +108,7 @@ func TestRunLogsStopLoopAndReturns20(t *testing.T) {
 func TestRunReturns22WhenPRDValidationFails(t *testing.T) {
 	t.Parallel()
 
-	root, tmpDir := setupWorkspace(t, `{"stories":[]}`, "prompt\n")
+	root, tmpDir := setupWorkspace(t, `{"branchName":"main","stories":[]}`, "prompt\n")
 	cfg := testConfig("printf 'ignored\\n'", nil, nil)
 
 	code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
@@ -127,7 +128,7 @@ func TestRunReturns21OnCompletionProtocolMismatch(t *testing.T) {
 
 	root, tmpDir := setupWorkspace(
 		t,
-		`{"stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
 		"prompt\n",
 	)
 
@@ -154,7 +155,7 @@ func TestRunReturns23WhenMaxIterationsReached(t *testing.T) {
 
 	root, tmpDir := setupWorkspace(
 		t,
-		`{"stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
 		"prompt\n",
 	)
 
@@ -176,6 +177,37 @@ func TestRunReturns23WhenMaxIterationsReached(t *testing.T) {
 	}
 }
 
+func TestRunSwitchesToBranchFromPRD(t *testing.T) {
+	t.Parallel()
+
+	root, tmpDir := setupWorkspace(
+		t,
+		`{"branchName":"feature/task-1","stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
+		"prompt\n",
+	)
+
+	cfg := testConfig("printf '"+ralphconfig.DefaultCompletionSignal+"\\n'", nil, nil)
+
+	code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+		WorkingDir: root,
+		Stdout:     io.Discard,
+		Stderr:     io.Discard,
+		TempDir:    tmpDir,
+		Sleep:      func(time.Duration) {},
+	})
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+
+	currentBranch, err := gitOutput(root, "branch", "--show-current")
+	if err != nil {
+		t.Fatalf("read current branch failed: %v", err)
+	}
+	if currentBranch != "feature/task-1" {
+		t.Fatalf("unexpected branch after run: got=%q want=%q", currentBranch, "feature/task-1")
+	}
+}
+
 func TestRunCleansTmpfilesOnSuccessFailureAndSignal(t *testing.T) {
 	t.Parallel()
 
@@ -184,7 +216,7 @@ func TestRunCleansTmpfilesOnSuccessFailureAndSignal(t *testing.T) {
 
 		root, tmpDir := setupWorkspace(
 			t,
-			`{"stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
+			`{"branchName":"main","stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
 			"prompt\n",
 		)
 		cfg := testConfig(
@@ -211,7 +243,7 @@ func TestRunCleansTmpfilesOnSuccessFailureAndSignal(t *testing.T) {
 
 		root, tmpDir := setupWorkspace(
 			t,
-			`{"stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
+			`{"branchName":"main","stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
 			"prompt\n",
 		)
 		cfg := testConfig("printf 'missing signal\\n'", nil, nil)
@@ -238,7 +270,7 @@ func TestRunCleansTmpfilesOnSuccessFailureAndSignal(t *testing.T) {
 
 		root, tmpDir := setupWorkspace(
 			t,
-			`{"stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+			`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
 			"prompt\n",
 		)
 		cfg := testConfig("sleep 5", nil, nil)
@@ -269,6 +301,8 @@ func setupWorkspace(t *testing.T, prdJSON, prompt string) (string, string) {
 	t.Helper()
 
 	root := t.TempDir()
+	initGitRepo(t, root)
+
 	ralphDir := filepath.Join(root, ".ralph")
 	if err := os.MkdirAll(ralphDir, 0o755); err != nil {
 		t.Fatalf("mkdir .ralph failed: %v", err)
@@ -279,6 +313,49 @@ func setupWorkspace(t *testing.T, prdJSON, prompt string) (string, string) {
 
 	tmpDir := t.TempDir()
 	return root, tmpDir
+}
+
+func initGitRepo(t *testing.T, root string) {
+	t.Helper()
+
+	if err := runGit(root, "init", "--initial-branch=main"); err != nil {
+		if err := runGit(root, "init"); err != nil {
+			t.Fatalf("git init failed: %v", err)
+		}
+		if err := runGit(root, "switch", "-c", "main"); err != nil {
+			t.Fatalf("git switch -c main failed: %v", err)
+		}
+	}
+}
+
+func runGit(root string, args ...string) error {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf(
+		"git %s: %w: %s",
+		strings.Join(args, " "),
+		err,
+		strings.TrimSpace(string(output)),
+	)
+}
+
+func gitOutput(root string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf(
+			"git %s: %w: %s",
+			strings.Join(args, " "),
+			err,
+			strings.TrimSpace(string(output)),
+		)
+	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 func testConfig(

@@ -77,8 +77,16 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 	tracker := newTmpTracker()
 	defer tracker.cleanupAll()
 
-	if _, err := loadPRD(paths.PRD); err != nil {
+	initialPRD, err := loadPRD(paths.PRD)
+	if err != nil {
 		logRuntimeError(opts.Stderr, err)
+		return ExitCodeRuntime
+	}
+	if err := ralphgit.EnsureBranch(ctx, ralphgit.EnsureBranchOptions{
+		WorkingDir: opts.WorkingDir,
+		BranchName: initialPRD.BranchName,
+	}); err != nil {
+		logRuntimeError(opts.Stderr, fmt.Errorf("ensure branch: %w", err))
 		return ExitCodeRuntime
 	}
 
