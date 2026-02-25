@@ -79,6 +79,7 @@
               "type": "string"
             },
             "tail_lines": {
+              "minimum": 1,
               "type": "integer"
             }
           },

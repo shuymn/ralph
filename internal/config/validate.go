@@ -136,7 +136,7 @@ func applyDefaults(cfg *Config) {
 	if cfg.Completion.Run.Signal == "" {
 		cfg.Completion.Run.Signal = DefaultCompletionSignal
 	}
-	if cfg.Completion.Run.TailLines == 0 {
+	if !cfg.Completion.Run.tailLinesExplicit && cfg.Completion.Run.TailLines == 0 {
 		cfg.Completion.Run.TailLines = DefaultRunCompletionTailLines
 	}
 	if cfg.Completion.Review.Strategy == "" {
@@ -178,6 +178,12 @@ func validateCompletion(cfg *Config) error {
 		return newValidationError(
 			ErrCodeConfigCompletion,
 			"completion.review.strategy must be "+DefaultReviewCompletionStrategy,
+		)
+	}
+	if cfg.Completion.Run.TailLines < 1 {
+		return newValidationError(
+			ErrCodeConfigCompletion,
+			"completion.run.tail_lines must be >= 1",
 		)
 	}
 

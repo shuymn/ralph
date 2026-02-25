@@ -65,6 +65,20 @@ var runtimeConstraintPatches = []constraintPatch{
 		},
 	},
 	{
+		name: "completion.run.tail_lines minimum",
+		path: []string{
+			"properties",
+			"completion",
+			"properties",
+			"run",
+			"properties",
+			"tail_lines",
+		},
+		apply: func(target map[string]any) {
+			setMinimumOne(target)
+		},
+	},
+	{
 		name: "completion.review.strategy enum",
 		path: []string{
 			"properties",

@@ -2,6 +2,7 @@ package ralphconfig_test
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -348,6 +349,37 @@ completion:
     strategy: tail_match
 `))
 	assertErrorContains(t, err, "completion.review.strategy must be review_convergence")
+}
+
+func TestLoadBytesRejectsNonPositiveTailLines(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name      string
+		tailLines int
+	}{
+		{name: "negative tail_lines", tailLines: -1},
+		{name: "zero tail_lines", tailLines: 0},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := ralphconfig.LoadBytes([]byte(`
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  run:
+    strategy: tail_match
+    tail_lines: ` + strconv.Itoa(tc.tailLines) + `
+  review:
+    strategy: review_convergence
+`))
+			assertErrorContains(t, err, "completion.run.tail_lines must be >= 1")
+		})
+	}
 }
 
 func TestLoadBytesAppliesReviewConvergencePartialDefaults(t *testing.T) {

@@ -187,6 +187,7 @@ func TestSchemaConstraints(t *testing.T) {
 		mustMapAtPath(t, runProfile, "properties", "strategy"),
 		[]string{tailMatch},
 	)
+	assertIntegerMinOne(t, runProfile, "tail_lines")
 	reviewProfile := mustMapAtPath(t, completion, "properties", "review")
 	assertAdditionalPropertiesFalse(t, "completion.review", reviewProfile)
 	assertEnumValues(

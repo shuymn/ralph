@@ -45,9 +45,10 @@ type Completion struct {
 }
 
 type RunCompletionProfile struct {
-	Strategy  string `json:"strategy,omitempty"   yaml:"strategy"`
-	Signal    string `json:"signal,omitempty"     yaml:"signal"`
-	TailLines int    `json:"tail_lines,omitempty" yaml:"tail_lines"` //nolint:tagliatelle // External schema key uses snake_case.
+	Strategy          string `json:"strategy,omitempty"   yaml:"strategy"`
+	Signal            string `json:"signal,omitempty"     yaml:"signal"`
+	TailLines         int    `json:"tail_lines,omitempty" yaml:"tail_lines"` //nolint:tagliatelle // External schema key uses snake_case.
+	tailLinesExplicit bool   `json:"-"                    yaml:"-"`
 }
 
 type ReviewCompletionProfile struct {
