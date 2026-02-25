@@ -17,7 +17,7 @@ func TestDryRunPrintsExecutionPlanAndSkipsCommandExecution(t *testing.T) {
 
 	root, tmpDir := setupWorkspace(
 		t,
-		`{"stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
 		"prompt\n",
 	)
 
@@ -123,7 +123,7 @@ func TestDryRunPrintsExecutionPlanAndSkipsCommandExecution(t *testing.T) {
 func TestDryRunReturns22WhenPRDValidationFails(t *testing.T) {
 	t.Parallel()
 
-	root, tmpDir := setupWorkspace(t, `{"stories":[]}`, "prompt\n")
+	root, tmpDir := setupWorkspace(t, `{"branchName":"main","stories":[]}`, "prompt\n")
 	cfg := testConfig("printf 'main\\n'", nil, nil)
 
 	var stdout bytes.Buffer

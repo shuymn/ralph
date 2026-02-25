@@ -23,7 +23,10 @@ func TestAutoCommitSplitStagesRalphBeforeNonRalph(t *testing.T) {
 	}
 
 	prdPath := filepath.Join(ralphDir, "prd.json")
-	writeFile(t, prdPath, `{"stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`)
+	writeFile(t, prdPath, `{
+  "branchName":"main",
+  "stories":[{"id":"TASK-1","passes":true,"deps":[]}]
+}`)
 
 	commitMsgPath := filepath.Join(ralphDir, ".commit-msg")
 	writeFile(t, commitMsgPath, "feat: implement task\n\nbody\n")
@@ -55,7 +58,7 @@ func TestAutoCommitSplitStagesRalphBeforeNonRalph(t *testing.T) {
 		PRDPath:           prdPath,
 		CommitMessagePath: commitMsgPath,
 		BeforePRD: mustPRDDocument(t,
-			`{"stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`),
+			`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`),
 		Runner: runner,
 	})
 	if err != nil {
@@ -125,13 +128,13 @@ func TestAutoCommitSplitRequiresExactlyOneTaskIDTransition(t *testing.T) {
 	}{
 		{
 			name:      "no transition",
-			beforePRD: `{"stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
-			afterPRD:  `{"stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+			beforePRD: `{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+			afterPRD:  `{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
 		},
 		{
 			name:      "multiple transitions",
-			beforePRD: `{"stories":[{"id":"TASK-1","passes":false,"deps":[]},{"id":"TASK-2","passes":false,"deps":[]}]}`,
-			afterPRD:  `{"stories":[{"id":"TASK-1","passes":true,"deps":[]},{"id":"TASK-2","passes":true,"deps":[]}]}`,
+			beforePRD: `{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]},{"id":"TASK-2","passes":false,"deps":[]}]}`,
+			afterPRD:  `{"branchName":"main","stories":[{"id":"TASK-1","passes":true,"deps":[]},{"id":"TASK-2","passes":true,"deps":[]}]}`,
 		},
 	}
 
@@ -213,7 +216,7 @@ func TestAutoCommitNoopWhenStagedDiffIsEmpty(t *testing.T) {
 			PRDPath:           filepath.Join(workspace, ".ralph", "prd.json"),
 			CommitMessagePath: filepath.Join(workspace, ".ralph", ".commit-msg"),
 			BeforePRD: mustPRDDocument(t,
-				`{"stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`),
+				`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`),
 			Runner: runner,
 		})
 		if err != nil {
