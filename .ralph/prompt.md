@@ -84,8 +84,6 @@ Append to `.ralph/progress.md` (never replace existing content):
 ```md
 ## [YYYY-MM-DD] - [Story ID]: [Title]
 - What was implemented
-- Files changed
-- DoD verification results
 - Learnings:
   - Patterns discovered
   - Gotchas encountered

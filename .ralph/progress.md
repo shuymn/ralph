@@ -59,3 +59,26 @@ Started: 2026-02-25
   - Gotchas encountered
     - `go test` and `task` commands require writable cache env vars in sandbox (`GOCACHE`, `GOMODCACHE`, `GOPATH`, `GOLANGCI_LINT_CACHE`).
 ---
+## [2026-02-25] - [task-3]: Implement expression evaluator for step `if`
+- What was implemented
+  - Added a dedicated `internal/condition` package with a lexer, recursive-descent parser, and evaluator for `if` expressions.
+  - Implemented support for `always()`, `success()`, `failure()`, `changed()`, boolean literals, `!`, `&&`, `||`, and parentheses.
+  - Added reusable evaluation context semantics (`Context.Success`, injected `Context.Changed`) plus a default git-backed callback using `git status --porcelain`.
+  - Added typed parse/evaluation errors and helper predicates so caller exit-code mapping can distinguish config parse failures from runtime expression failures.
+  - Added tests for function semantics, operator precedence/parentheses, unknown symbol rejection, and `changed()` git-command failure propagation.
+- Files changed
+  - `internal/condition/lexer.go`
+  - `internal/condition/parser.go`
+  - `internal/condition/evaluator.go`
+  - `internal/condition/evaluator_test.go`
+- DoD verification results
+  - `task fmt`: pass
+  - `task lint`: pass
+  - `task test`: pass
+  - `task check`: pass
+- Learnings:
+  - Patterns discovered
+    - A small recursive-descent parser plus short-circuit AST evaluation keeps condition semantics deterministic and easy to embed into multiple runner phases.
+  - Gotchas encountered
+    - Repository lint rules require `exec.CommandContext` and exhaustive handling patterns; replacing enum `switch`es with guarded `if` branches avoided false positives while preserving strict error handling.
+---
