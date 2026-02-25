@@ -37,6 +37,7 @@ func runCommand(root string, stdout, stderr io.Writer, command string, dryRun bo
 		_, _ = fmt.Fprintf(stderr, "ralph %s failed: %v\n", command, err)
 		return errorExitCode(err, 1)
 	}
+	mode := resolveCommandMode(command)
 	if command == commandReview &&
 		cfg.Completion.Review.Strategy != ralphconfig.DefaultReviewCompletionStrategy {
 		_, _ = fmt.Fprintf(
@@ -52,6 +53,7 @@ func runCommand(root string, stdout, stderr io.Writer, command string, dryRun bo
 			WorkingDir: root,
 			Stdout:     stdout,
 			Stderr:     stderr,
+			Mode:       mode,
 		})
 	}
 
@@ -62,7 +64,15 @@ func runCommand(root string, stdout, stderr io.Writer, command string, dryRun bo
 		WorkingDir: root,
 		Stdout:     stdout,
 		Stderr:     stderr,
+		Mode:       mode,
 	})
+}
+
+func resolveCommandMode(command string) ralphrunner.Mode {
+	if command == commandReview {
+		return ralphrunner.ModeReview
+	}
+	return ralphrunner.ModeRun
 }
 
 func errorExitCode(err error, fallback int) int {

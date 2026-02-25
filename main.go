@@ -86,6 +86,7 @@ func runLoop(root, command string, dryRun bool) int {
 		_, _ = fmt.Fprintf(os.Stderr, "ralph %s failed: %v\n", command, err)
 		return errorExitCode(err, exitFailure)
 	}
+	mode := resolveCommandMode(command)
 	if command == "review" &&
 		cfg.Completion.Review.Strategy != ralphconfig.DefaultReviewCompletionStrategy {
 		_, _ = fmt.Fprintf(
@@ -101,6 +102,7 @@ func runLoop(root, command string, dryRun bool) int {
 			WorkingDir: root,
 			Stdout:     os.Stdout,
 			Stderr:     os.Stderr,
+			Mode:       mode,
 		})
 	}
 
@@ -111,7 +113,15 @@ func runLoop(root, command string, dryRun bool) int {
 		WorkingDir: root,
 		Stdout:     os.Stdout,
 		Stderr:     os.Stderr,
+		Mode:       mode,
 	})
+}
+
+func resolveCommandMode(command string) ralphrunner.Mode {
+	if command == "review" {
+		return ralphrunner.ModeReview
+	}
+	return ralphrunner.ModeRun
 }
 
 func errorExitCode(err error, fallback int) int {
