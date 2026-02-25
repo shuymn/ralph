@@ -82,6 +82,12 @@ type phaseResult struct {
 	reason   string
 }
 
+type reviewRuntime struct {
+	state     reviewState
+	config    ralphconfig.ReviewConvergenceMode
+	artifacts reviewArtifacts
+}
+
 func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 	if ctx == nil {
 		ctx = context.Background()
@@ -93,6 +99,17 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 	if err != nil {
 		logRuntimeError(opts.Stderr, err)
 		return ExitCodeRuntime
+	}
+	var reviewRuntimeState *reviewRuntime
+	enableReviewScheduler := modePlan.Mode == ModeReview &&
+		strings.TrimSpace(string(opts.Role)) == ""
+	if enableReviewScheduler {
+		runtime := newReviewRuntime(
+			paths,
+			cfg.Completion.Review.ReviewConvergence,
+			time.Now(),
+		)
+		reviewRuntimeState = &runtime
 	}
 	autoCommitBase := ralphgit.Options{
 		WorkingDir:        opts.WorkingDir,
@@ -130,6 +147,24 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			logRuntimeError(opts.Stderr, err)
 			return ExitCodeRuntime
 		}
+		iterationPlan := modePlan
+		if reviewRuntimeState != nil {
+			scheduledRole := nextReviewRole(
+				reviewRuntimeState.state,
+				reviewRuntimeState.config,
+			)
+			iterationPlan, err = resolveModePlan(
+				cfg,
+				paths,
+				ModeReview,
+				scheduledRole,
+			)
+			if err != nil {
+				logRuntimeError(opts.Stderr, err)
+				return ExitCodeRuntime
+			}
+		}
+
 		autoCommitOpts := autoCommitBase
 		autoCommitOpts.BeforePRD = beforePRD
 
@@ -153,14 +188,34 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 		}
 
 		mainResult, err := runMainStep(ctx, mainStepPlan{
-			Role:       modePlan.Role,
-			Command:    modePlan.Command,
-			PromptPath: modePlan.PromptPath,
+			Role:       iterationPlan.Role,
+			Command:    iterationPlan.Command,
+			PromptPath: iterationPlan.PromptPath,
 		}, opts, tracker)
 		if err != nil {
 			tracker.cleanup(mainResult.OutputPath)
 			logRuntimeError(opts.Stderr, err)
 			return ExitCodeRuntime
+		}
+		if reviewRuntimeState != nil {
+			artifactPath, err := reviewRuntimeState.artifacts.nextPath(
+				iterationPlan.Role,
+				reviewRuntimeState.state,
+			)
+			if err != nil {
+				tracker.cleanup(mainResult.OutputPath)
+				logRuntimeError(opts.Stderr, err)
+				return ExitCodeRuntime
+			}
+			if err := reviewRuntimeState.artifacts.persist(
+				artifactPath,
+				mainResult.OutputPath,
+			); err != nil {
+				tracker.cleanup(mainResult.OutputPath)
+				logRuntimeError(opts.Stderr, err)
+				return ExitCodeRuntime
+			}
+			reviewRuntimeState.state.recordRole(iterationPlan.Role)
 		}
 
 		postResult, err := runPhase(
@@ -182,18 +237,22 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			return ExitCodeStopLoop
 		}
 
-		completionCode, err := completeIteration(
-			mainResult,
-			paths.PRD,
-			modePlan.Completion,
-			tracker,
-		)
-		if err != nil {
-			logRuntimeError(opts.Stderr, err)
-			return ExitCodeRuntime
-		}
-		if completionCode != noExitCode {
-			return completionCode
+		if reviewRuntimeState != nil {
+			tracker.cleanup(mainResult.OutputPath)
+		} else {
+			completionCode, err := completeIteration(
+				mainResult,
+				paths.PRD,
+				iterationPlan.Completion,
+				tracker,
+			)
+			if err != nil {
+				logRuntimeError(opts.Stderr, err)
+				return ExitCodeRuntime
+			}
+			if completionCode != noExitCode {
+				return completionCode
+			}
 		}
 
 		sleepDuration := time.Duration(plan.Agent.SleepSeconds) * time.Second
@@ -204,6 +263,19 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 	}
 
 	return ExitCodeMaxIterations
+}
+
+func newReviewRuntime(
+	paths fixedPaths,
+	config ralphconfig.ReviewConvergenceMode,
+	now time.Time,
+) reviewRuntime {
+	state := newReviewState(now)
+	return reviewRuntime{
+		state:     state,
+		config:    config,
+		artifacts: newReviewArtifacts(paths, state.runID),
+	}
 }
 
 func runPhase(
