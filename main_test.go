@@ -103,6 +103,49 @@ func TestRunPropagatesExitCodes(t *testing.T) {
 	}
 }
 
+func TestRunInitBranch(t *testing.T) {
+	testCases := []struct {
+		name     string
+		setup    func(t *testing.T, root string)
+		wantCode int
+	}{
+		{
+			name: "init success",
+			setup: func(t *testing.T, _ string) {
+				t.Helper()
+			},
+			wantCode: exitOK,
+		},
+		{
+			name: "init failure",
+			setup: func(t *testing.T, root string) {
+				t.Helper()
+				if err := os.WriteFile(
+					filepath.Join(root, ".ralph"),
+					[]byte("file blocks directory creation\n"),
+					0o600,
+				); err != nil {
+					t.Fatalf("write blocking .ralph file: %v", err)
+				}
+			},
+			wantCode: exitFailure,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			tc.setup(t, root)
+			t.Chdir(root)
+
+			exitCode := run([]string{"init"})
+			if exitCode != tc.wantCode {
+				t.Fatalf("expected exit code %d, got %d", tc.wantCode, exitCode)
+			}
+		})
+	}
+}
+
 func writeRalphFile(t *testing.T, root, name, content string) {
 	t.Helper()
 
