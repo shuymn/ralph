@@ -410,6 +410,216 @@ func TestAutoCommitUsesFallbackWhenCommitMsgIsEmpty(t *testing.T) {
 	}
 }
 
+func TestAutoCommitRetriesWithoutGPGSignOnSigningFailure(t *testing.T) {
+	t.Parallel()
+
+	workspace := t.TempDir()
+	ralphDir := filepath.Join(workspace, ".ralph")
+	if err := os.MkdirAll(ralphDir, 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+
+	commitMsgPath := filepath.Join(ralphDir, ".commit-msg")
+	fallback := "feat: fallback message"
+	runner := newQueuedRunner()
+	runner.enqueue([]string{"add", "-A"}, ralphgit.CommandResult{ExitCode: 0})
+	runner.enqueue(
+		[]string{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
+		ralphgit.CommandResult{ExitCode: 0},
+	)
+	runner.enqueue(
+		[]string{"diff", "--cached", "--quiet", "--exit-code"},
+		ralphgit.CommandResult{ExitCode: 1},
+	)
+	runner.enqueue(
+		[]string{"commit", "-m", fallback},
+		ralphgit.CommandResult{
+			ExitCode: 128,
+			Stderr: "error: gpg failed to sign the data\n" +
+				"fatal: failed to write commit object",
+		},
+	)
+	runner.enqueue(
+		[]string{"commit", "--no-gpg-sign", "-m", fallback},
+		ralphgit.CommandResult{ExitCode: 0},
+	)
+
+	err := ralphgit.AutoCommit(context.Background(), ralphgit.Options{
+		WorkingDir:        workspace,
+		Mode:              "together",
+		FallbackMessage:   fallback,
+		FallbackNoGPGSign: true,
+		PRDPath:           filepath.Join(ralphDir, "prd.json"),
+		CommitMessagePath: commitMsgPath,
+		Runner:            runner,
+	})
+	if err != nil {
+		t.Fatalf("auto commit failed: %v", err)
+	}
+
+	assertCalls(t, runner.calls, workspace, [][]string{
+		{"add", "-A"},
+		{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
+		{"diff", "--cached", "--quiet", "--exit-code"},
+		{"commit", "-m", fallback},
+		{"commit", "--no-gpg-sign", "-m", fallback},
+	})
+	runner.assertNoPending(t)
+}
+
+func TestAutoCommitDoesNotRetryWithoutGPGSignFallback(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name              string
+		fallbackNoGPGSign bool
+		stderr            string
+	}{
+		{
+			name:              "option disabled on gpg sign failure",
+			fallbackNoGPGSign: false,
+			stderr:            "error: gpg failed to sign the data",
+		},
+		{
+			name:              "non-signing failure",
+			fallbackNoGPGSign: true,
+			stderr:            "fatal: unable to create '.git/index.lock': File exists.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			workspace := t.TempDir()
+			ralphDir := filepath.Join(workspace, ".ralph")
+			if err := os.MkdirAll(ralphDir, 0o755); err != nil {
+				t.Fatalf("mkdir failed: %v", err)
+			}
+
+			commitMsgPath := filepath.Join(ralphDir, ".commit-msg")
+			fallback := "feat: fallback message"
+			runner := newQueuedRunner()
+			runner.enqueue([]string{"add", "-A"}, ralphgit.CommandResult{ExitCode: 0})
+			runner.enqueue(
+				[]string{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
+				ralphgit.CommandResult{ExitCode: 0},
+			)
+			runner.enqueue(
+				[]string{"diff", "--cached", "--quiet", "--exit-code"},
+				ralphgit.CommandResult{ExitCode: 1},
+			)
+			runner.enqueue(
+				[]string{"commit", "-m", fallback},
+				ralphgit.CommandResult{
+					ExitCode: 128,
+					Stderr:   tc.stderr,
+				},
+			)
+
+			err := ralphgit.AutoCommit(context.Background(), ralphgit.Options{
+				WorkingDir:        workspace,
+				Mode:              "together",
+				FallbackMessage:   fallback,
+				FallbackNoGPGSign: tc.fallbackNoGPGSign,
+				PRDPath:           filepath.Join(ralphDir, "prd.json"),
+				CommitMessagePath: commitMsgPath,
+				Runner:            runner,
+			})
+			if err == nil {
+				t.Fatalf("expected error but got nil")
+			}
+
+			assertCalls(t, runner.calls, workspace, [][]string{
+				{"add", "-A"},
+				{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
+				{"diff", "--cached", "--quiet", "--exit-code"},
+				{"commit", "-m", fallback},
+			})
+			runner.assertNoPending(t)
+		})
+	}
+}
+
+func TestAutoCommitSplitRalphCommitRetriesWithoutGPGSignOnSigningFailure(t *testing.T) {
+	t.Parallel()
+
+	workspace := t.TempDir()
+	ralphDir := filepath.Join(workspace, ".ralph")
+	if err := os.MkdirAll(ralphDir, 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+
+	prdPath := filepath.Join(ralphDir, "prd.json")
+	writeFile(t, prdPath, `{
+  "branchName":"main",
+  "stories":[{"id":"TASK-1","passes":true,"deps":[]}]
+}`)
+
+	commitMsgPath := filepath.Join(ralphDir, ".commit-msg")
+	const ralphMsg = "chore(ralph): mark TASK-1 complete in PRD and progress"
+
+	runner := newQueuedRunner()
+	runner.enqueue([]string{"add", "-A"}, ralphgit.CommandResult{ExitCode: 0})
+	runner.enqueue(
+		[]string{"restore", "--staged", ".ralph/"},
+		ralphgit.CommandResult{ExitCode: 0},
+	)
+	runner.enqueue(
+		[]string{"diff", "--cached", "--quiet", "--exit-code"},
+		ralphgit.CommandResult{ExitCode: 0},
+	)
+	runner.enqueue([]string{"add", "-A", ".ralph/"}, ralphgit.CommandResult{ExitCode: 0})
+	runner.enqueue(
+		[]string{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
+		ralphgit.CommandResult{ExitCode: 0},
+	)
+	runner.enqueue(
+		[]string{"diff", "--cached", "--quiet", "--exit-code"},
+		ralphgit.CommandResult{ExitCode: 1},
+	)
+	runner.enqueue(
+		[]string{"commit", "-m", ralphMsg},
+		ralphgit.CommandResult{
+			ExitCode: 128,
+			Stderr:   "error: gpg: signing failed: Operation canceled",
+		},
+	)
+	runner.enqueue(
+		[]string{"commit", "--no-gpg-sign", "-m", ralphMsg},
+		ralphgit.CommandResult{ExitCode: 0},
+	)
+
+	err := ralphgit.AutoCommit(context.Background(), ralphgit.Options{
+		WorkingDir:        workspace,
+		Mode:              "split",
+		FallbackMessage:   "feat: fallback",
+		FallbackNoGPGSign: true,
+		PRDPath:           prdPath,
+		CommitMessagePath: commitMsgPath,
+		BeforePRD: mustPRDDocument(
+			t,
+			`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+		),
+		Runner: runner,
+	})
+	if err != nil {
+		t.Fatalf("auto commit failed: %v", err)
+	}
+
+	assertCalls(t, runner.calls, workspace, [][]string{
+		{"add", "-A"},
+		{"restore", "--staged", ".ralph/"},
+		{"diff", "--cached", "--quiet", "--exit-code"},
+		{"add", "-A", ".ralph/"},
+		{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
+		{"diff", "--cached", "--quiet", "--exit-code"},
+		{"commit", "-m", ralphMsg},
+		{"commit", "--no-gpg-sign", "-m", ralphMsg},
+	})
+	runner.assertNoPending(t)
+}
+
 type queuedRunner struct {
 	calls     []gitCall
 	responses map[string][]queuedResponse
