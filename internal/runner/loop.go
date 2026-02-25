@@ -27,7 +27,10 @@ const noExitCode = -1
 
 const (
 	ralphDirName          = ".ralph"
-	promptFileName        = "prompt.md"
+	promptRunFileName     = "prompt.run.md"
+	promptReviewFileName  = "prompt.review.md"
+	promptJudgeFileName   = "prompt.judge.md"
+	legacyPromptFileName  = "prompt.md"
 	prdFileName           = "prd.json"
 	commitMessageFileName = ".commit-msg"
 )
@@ -40,10 +43,30 @@ type Options struct {
 	Stderr     io.Writer
 	TempDir    string
 	Sleep      func(time.Duration)
+	Mode       Mode
+	Role       Role
 }
+
+type Mode string
+
+const (
+	ModeRun    Mode = "run"
+	ModeReview Mode = "review"
+)
+
+type Role string
+
+const (
+	RoleRun    Role = "run"
+	RoleReview Role = "review"
+	RoleJudge  Role = "judge"
+)
 
 type fixedPaths struct {
 	Prompt        string
+	PromptRun     string
+	PromptReview  string
+	PromptJudge   string
 	PRD           string
 	CommitMessage string
 }
@@ -66,6 +89,11 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 	opts = normalizeOptions(opts)
 	plan := buildRunPlan(cfg, opts.WorkingDir)
 	paths := plan.Paths
+	modePlan, err := resolveModePlan(cfg, paths, opts.Mode, opts.Role)
+	if err != nil {
+		logRuntimeError(opts.Stderr, err)
+		return ExitCodeRuntime
+	}
 	autoCommitBase := ralphgit.Options{
 		WorkingDir:        opts.WorkingDir,
 		Mode:              plan.Git.Commit,
@@ -124,7 +152,11 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			return ExitCodeStopLoop
 		}
 
-		mainResult, err := runMainStep(ctx, plan.Agent.Command, paths.Prompt, opts, tracker)
+		mainResult, err := runMainStep(ctx, mainStepPlan{
+			Role:       modePlan.Role,
+			Command:    modePlan.Command,
+			PromptPath: modePlan.PromptPath,
+		}, opts, tracker)
 		if err != nil {
 			tracker.cleanup(mainResult.OutputPath)
 			logRuntimeError(opts.Stderr, err)
@@ -150,7 +182,12 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			return ExitCodeStopLoop
 		}
 
-		completionCode, err := completeIteration(mainResult, paths.PRD, plan.Completion, tracker)
+		completionCode, err := completeIteration(
+			mainResult,
+			paths.PRD,
+			modePlan.Completion,
+			tracker,
+		)
 		if err != nil {
 			logRuntimeError(opts.Stderr, err)
 			return ExitCodeRuntime
@@ -237,7 +274,10 @@ func runStep(
 func resolvePaths(workingDir string) fixedPaths {
 	base := filepath.Join(workingDir, ralphDirName)
 	return fixedPaths{
-		Prompt:        filepath.Join(base, promptFileName),
+		Prompt:        filepath.Join(base, legacyPromptFileName),
+		PromptRun:     filepath.Join(base, promptRunFileName),
+		PromptReview:  filepath.Join(base, promptReviewFileName),
+		PromptJudge:   filepath.Join(base, promptJudgeFileName),
 		PRD:           filepath.Join(base, prdFileName),
 		CommitMessage: filepath.Join(base, commitMessageFileName),
 	}
@@ -266,6 +306,9 @@ func normalizeOptions(opts Options) Options {
 	}
 	if opts.Stderr == nil {
 		opts.Stderr = os.Stderr
+	}
+	if strings.TrimSpace(string(opts.Mode)) == "" {
+		opts.Mode = ModeRun
 	}
 
 	return opts

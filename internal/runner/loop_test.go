@@ -71,6 +71,271 @@ func TestRunExecutesPreMainPostInOrder(t *testing.T) {
 	}
 }
 
+func TestRunUsesPromptRunPath(t *testing.T) {
+	t.Parallel()
+
+	root, tmpDir := setupWorkspace(
+		t,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
+		"legacy-prompt\n",
+	)
+
+	runPrompt := filepath.Join(root, ".ralph", "prompt.run.md")
+	writeFile(t, runPrompt, "run-prompt\n")
+
+	mainInput := filepath.Join(root, ".ralph", "main-input.txt")
+	cfg := testConfig(
+		fmt.Sprintf(
+			"cat > %s; printf '%s\\n'",
+			shQuote(mainInput),
+			ralphconfig.DefaultCompletionSignal,
+		),
+		nil,
+		nil,
+	)
+	cfg.Agent.RunCommand = cfg.Agent.Command
+	cfg.Agent.Command = ""
+
+	code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+		WorkingDir: root,
+		Stdout:     io.Discard,
+		Stderr:     io.Discard,
+		TempDir:    tmpDir,
+		Sleep:      func(time.Duration) {},
+		Mode:       ralphrunner.ModeRun,
+	})
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+
+	stdin := readFile(t, mainInput)
+	if stdin != "run-prompt\n" {
+		t.Fatalf("expected run prompt to be piped to main stdin, got %q", stdin)
+	}
+}
+
+func TestReviewRequiresPromptFiles(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name                string
+		presentPromptFile   string
+		presentPromptValue  string
+		missingPromptSubstr string
+	}{
+		{
+			name:                "missing review prompt",
+			presentPromptFile:   "prompt.judge.md",
+			presentPromptValue:  "judge-prompt\n",
+			missingPromptSubstr: "prompt.review.md",
+		},
+		{
+			name:                "missing judge prompt",
+			presentPromptFile:   "prompt.review.md",
+			presentPromptValue:  "review-prompt\n",
+			missingPromptSubstr: "prompt.judge.md",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			root, tmpDir := setupWorkspace(
+				t,
+				`{"branchName":"main","stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
+				"legacy-prompt\n",
+			)
+			writeFile(t, filepath.Join(root, ".ralph", tc.presentPromptFile), tc.presentPromptValue)
+
+			cfg := testConfig("printf '"+ralphconfig.DefaultCompletionSignal+"\\n'", nil, nil)
+			cfg.Agent.RunCommand = cfg.Agent.Command
+			cfg.Agent.Command = ""
+			cfg.Completion.Run = ralphconfig.RunCompletionProfile{
+				Strategy:  ralphconfig.DefaultRunCompletionStrategy,
+				Signal:    ralphconfig.DefaultCompletionSignal,
+				TailLines: ralphconfig.DefaultRunCompletionTailLines,
+			}
+			cfg.Completion.Review = ralphconfig.ReviewCompletionProfile{
+				Strategy: ralphconfig.DefaultReviewCompletionStrategy,
+				Signal:   ralphconfig.DefaultCompletionSignal,
+				ReviewConvergence: ralphconfig.ReviewConvergenceMode{
+					MinReviews:   ralphconfig.DefaultReviewMinReviews,
+					MaxReviews:   ralphconfig.DefaultReviewMaxReviews,
+					JudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
+					StableRounds: ralphconfig.DefaultReviewStableRounds,
+				},
+			}
+			cfg.Completion.Strategy = ""
+			cfg.Completion.Signal = ""
+			cfg.Completion.TailLines = 0
+
+			var stderr bytes.Buffer
+			code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+				WorkingDir: root,
+				Stdout:     io.Discard,
+				Stderr:     &stderr,
+				TempDir:    tmpDir,
+				Sleep:      func(time.Duration) {},
+				Mode:       ralphrunner.ModeReview,
+			})
+			if code != ralphrunner.ExitCodeRuntime {
+				t.Fatalf("expected runtime exit code %d, got %d", ralphrunner.ExitCodeRuntime, code)
+			}
+			if !strings.Contains(stderr.String(), tc.missingPromptSubstr) {
+				t.Fatalf(
+					"expected missing prompt error for %s, got: %q",
+					tc.missingPromptSubstr,
+					stderr.String(),
+				)
+			}
+		})
+	}
+}
+
+func TestRoleCommandFallback(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		role        ralphrunner.Role
+		promptFile  string
+		promptValue string
+	}{
+		{
+			name:        "review role falls back to run_command",
+			role:        ralphrunner.RoleReview,
+			promptFile:  "prompt.review.md",
+			promptValue: "review prompt\n",
+		},
+		{
+			name:        "judge role falls back to run_command",
+			role:        ralphrunner.RoleJudge,
+			promptFile:  "prompt.judge.md",
+			promptValue: "judge prompt\n",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			root, tmpDir := setupWorkspace(
+				t,
+				`{"branchName":"main","stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
+				"legacy-prompt\n",
+			)
+
+			writeFile(t, filepath.Join(root, ".ralph", "prompt.review.md"), "review prompt\n")
+			writeFile(t, filepath.Join(root, ".ralph", "prompt.judge.md"), "judge prompt\n")
+			writeFile(t, filepath.Join(root, ".ralph", "prompt.run.md"), "run prompt\n")
+
+			stdinCapture := filepath.Join(root, ".ralph", "main-input.txt")
+			cfg := testConfig("", nil, nil)
+			cfg.Agent.RunCommand = fmt.Sprintf(
+				"cat > %s; printf '%s\\n'",
+				shQuote(stdinCapture),
+				ralphconfig.DefaultCompletionSignal,
+			)
+			cfg.Agent.ReviewCommand = ""
+			cfg.Agent.JudgeCommand = ""
+			cfg.Agent.Command = ""
+			cfg.Completion.Run = ralphconfig.RunCompletionProfile{
+				Strategy:  ralphconfig.DefaultRunCompletionStrategy,
+				Signal:    ralphconfig.DefaultCompletionSignal,
+				TailLines: ralphconfig.DefaultRunCompletionTailLines,
+			}
+			cfg.Completion.Review = ralphconfig.ReviewCompletionProfile{
+				Strategy: ralphconfig.DefaultReviewCompletionStrategy,
+				Signal:   ralphconfig.DefaultCompletionSignal,
+				ReviewConvergence: ralphconfig.ReviewConvergenceMode{
+					MinReviews:   ralphconfig.DefaultReviewMinReviews,
+					MaxReviews:   ralphconfig.DefaultReviewMaxReviews,
+					JudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
+					StableRounds: ralphconfig.DefaultReviewStableRounds,
+				},
+			}
+			cfg.Completion.Strategy = ""
+			cfg.Completion.Signal = ""
+			cfg.Completion.TailLines = 0
+
+			code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+				WorkingDir: root,
+				Stdout:     io.Discard,
+				Stderr:     io.Discard,
+				TempDir:    tmpDir,
+				Sleep:      func(time.Duration) {},
+				Mode:       ralphrunner.ModeReview,
+				Role:       tc.role,
+			})
+			if code != 0 {
+				t.Fatalf("expected exit code 0, got %d", code)
+			}
+
+			got := readFile(t, stdinCapture)
+			if got != tc.promptValue {
+				t.Fatalf("expected prompt from %s, got %q", tc.promptFile, got)
+			}
+		})
+	}
+}
+
+func TestRunTailMatchCompatibility(t *testing.T) {
+	t.Parallel()
+
+	root, tmpDir := setupWorkspace(
+		t,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
+		"legacy-prompt\n",
+	)
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.run.md"), "run prompt\n")
+
+	cfg := ralphconfig.Config{
+		Version: ralphconfig.SupportedVersion,
+		Agent: ralphconfig.Agent{
+			RunCommand: fmt.Sprintf(
+				"printf 'noise\\n%s\\n'",
+				ralphconfig.DefaultCompletionSignal,
+			),
+			MaxIterations: 1,
+			SleepSeconds:  0,
+		},
+		Completion: ralphconfig.Completion{
+			Run: ralphconfig.RunCompletionProfile{
+				Strategy:  ralphconfig.DefaultRunCompletionStrategy,
+				Signal:    ralphconfig.DefaultCompletionSignal,
+				TailLines: 2,
+			},
+			Review: ralphconfig.ReviewCompletionProfile{
+				Strategy: ralphconfig.DefaultReviewCompletionStrategy,
+				Signal:   ralphconfig.DefaultCompletionSignal,
+				ReviewConvergence: ralphconfig.ReviewConvergenceMode{
+					MinReviews:   ralphconfig.DefaultReviewMinReviews,
+					MaxReviews:   ralphconfig.DefaultReviewMaxReviews,
+					JudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
+					StableRounds: ralphconfig.DefaultReviewStableRounds,
+				},
+			},
+		},
+		Git: ralphconfig.Git{
+			Commit:          ralphconfig.DefaultGitCommitMode,
+			FallbackMessage: ralphconfig.DefaultFallbackCommit,
+		},
+	}
+
+	code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+		WorkingDir: root,
+		Stdout:     io.Discard,
+		Stderr:     io.Discard,
+		TempDir:    tmpDir,
+		Sleep:      func(time.Duration) {},
+		Mode:       ralphrunner.ModeRun,
+	})
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+}
+
 func TestRunLogsStopLoopAndReturns20(t *testing.T) {
 	t.Parallel()
 
@@ -309,7 +574,7 @@ func setupWorkspace(t *testing.T, prdJSON, prompt string) (string, string) {
 	}
 
 	writeFile(t, filepath.Join(ralphDir, "prd.json"), prdJSON+"\n")
-	writeFile(t, filepath.Join(ralphDir, "prompt.md"), prompt)
+	writeFile(t, filepath.Join(ralphDir, "prompt.run.md"), prompt)
 
 	tmpDir := t.TempDir()
 	return root, tmpDir
@@ -366,11 +631,27 @@ func testConfig(
 	return ralphconfig.Config{
 		Version: ralphconfig.SupportedVersion,
 		Agent: ralphconfig.Agent{
+			RunCommand:    agentCommand,
 			Command:       agentCommand,
 			MaxIterations: 1,
 			SleepSeconds:  0,
 		},
 		Completion: ralphconfig.Completion{
+			Run: ralphconfig.RunCompletionProfile{
+				Strategy:  ralphconfig.DefaultRunCompletionStrategy,
+				Signal:    ralphconfig.DefaultCompletionSignal,
+				TailLines: ralphconfig.DefaultRunCompletionTailLines,
+			},
+			Review: ralphconfig.ReviewCompletionProfile{
+				Strategy: ralphconfig.DefaultReviewCompletionStrategy,
+				Signal:   ralphconfig.DefaultCompletionSignal,
+				ReviewConvergence: ralphconfig.ReviewConvergenceMode{
+					MinReviews:   ralphconfig.DefaultReviewMinReviews,
+					MaxReviews:   ralphconfig.DefaultReviewMaxReviews,
+					JudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
+					StableRounds: ralphconfig.DefaultReviewStableRounds,
+				},
+			},
 			Strategy:  ralphconfig.DefaultCompletionStrategy,
 			Signal:    ralphconfig.DefaultCompletionSignal,
 			TailLines: ralphconfig.DefaultCompletionTailLines,

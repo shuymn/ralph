@@ -13,16 +13,21 @@ type mainResult struct {
 	OutputPath string
 }
 
+type mainStepPlan struct {
+	Role       Role
+	Command    string
+	PromptPath string
+}
+
 func runMainStep(
 	ctx context.Context,
-	agentCommand string,
-	promptPath string,
+	plan mainStepPlan,
 	opts Options,
 	tracker *tmpTracker,
 ) (mainResult, error) {
-	promptFile, err := os.Open(promptPath)
+	promptFile, err := os.Open(plan.PromptPath)
 	if err != nil {
-		return mainResult{}, fmt.Errorf("open prompt: %w", err)
+		return mainResult{}, fmt.Errorf("open %s prompt: %w", plan.Role, err)
 	}
 	defer func() {
 		_ = promptFile.Close()
@@ -35,7 +40,8 @@ func runMainStep(
 
 	result := mainResult{OutputPath: tmpFile.Name()}
 
-	cmd := exec.CommandContext(ctx, "sh", "-c", agentCommand)
+	//nolint:gosec // command comes from validated user config; shell execution is intentional.
+	cmd := exec.CommandContext(ctx, "sh", "-c", plan.Command)
 	cmd.Dir = opts.WorkingDir
 	cmd.Stdin = promptFile
 	cmd.Stdout = tmpFile
