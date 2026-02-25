@@ -146,6 +146,52 @@ phases:
 	assertErrorCode(t, err, ralphconfig.ErrCodeConfigGitCommit)
 }
 
+func TestLoadBytesNormalizesCommitModeWhitespace(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name       string
+		commitMode string
+		wantCommit string
+	}{
+		{
+			name:       "split with trailing whitespace",
+			commitMode: "split ",
+			wantCommit: "split",
+		},
+		{
+			name:       "together with leading whitespace",
+			commitMode: " together",
+			wantCommit: "together",
+		},
+		{
+			name:       "together with surrounding whitespace",
+			commitMode: "  together  ",
+			wantCommit: "together",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg, err := ralphconfig.LoadBytes([]byte(`
+version: "1"
+agent:
+  run_command: "echo hello"
+git:
+  commit: "` + tc.commitMode + `"
+`))
+			if err != nil {
+				t.Fatalf("LoadBytes returned error: %v", err)
+			}
+			if cfg.Git.Commit != tc.wantCommit {
+				t.Fatalf("git.commit=%q, want %q", cfg.Git.Commit, tc.wantCommit)
+			}
+		})
+	}
+}
+
 func TestLoadBytesRejectsMissingRunCommand(t *testing.T) {
 	t.Parallel()
 

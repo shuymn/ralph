@@ -159,7 +159,8 @@ func applyDefaults(cfg *Config) {
 		review.StableRounds = DefaultReviewStableRounds
 	}
 
-	if strings.TrimSpace(cfg.Git.Commit) == "" {
+	cfg.Git.Commit = strings.TrimSpace(cfg.Git.Commit)
+	if cfg.Git.Commit == "" {
 		cfg.Git.Commit = DefaultGitCommitMode
 	}
 	if strings.TrimSpace(cfg.Git.FallbackMessage) == "" {
