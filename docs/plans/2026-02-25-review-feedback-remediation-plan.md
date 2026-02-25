@@ -4,6 +4,7 @@
 **Trace Pack**: `docs/plans/2026-02-25-review-feedback-remediation-plan.trace.md`
 **Compose Pack**: `docs/plans/2026-02-25-review-feedback-remediation-plan.compose.md`
 **Goal**: 受理済み除外事項（run_id秒粒度、init最小構成）を明示した上で、有効なレビュー指摘を fail-fast と回帰テストで収束させる。
+**Remediation Scope**: findings status は `fix` / `accepted` / `no-action` を正規語彙として扱い、task 単位の判定に再利用する。
 **Architecture**: `review` 実行時の完了判定は scheduler 有無ではなく mode 契約で評価する。config/judge 契約は可能な限り load/parse 時点で fail-closed とし、README/設計記録を実装と同期させる。
 **Tech Stack**: Go, YAML validation, JSON decode, existing runner/config schema generator, Task.
 

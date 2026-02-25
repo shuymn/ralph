@@ -28,6 +28,12 @@ CLI は `ralph run` と `ralph review` の 2 サブコマンドを提供する�
 - runner がレビュー内容の意味理解を強制的に行う高度な自然言語解析。
 - v1 での reviewer 並列実行（同時プロセス実行）。
 
+## Remediation Scope Freeze (2026-02-25)
+
+- remediation scope では finding status を `fix` / `accepted` / `no-action` で固定管理する。
+- `run_id` の UTC 秒粒度（`YYYYMMDDTHHMMSSZ`）は accepted risk とし、本補修では実装変更対象外とする。
+- init quality gate の強制追加は no-action とし、最小 scaffold 方針（`ralph init` は最小構成を生成）を維持する。
+
 ## Background
 
 現状の完了判定は `tail_match` のみであり、`stories[].passes` と signal 一致で停止する。  

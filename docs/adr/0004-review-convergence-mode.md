@@ -64,3 +64,9 @@ Proposed
 
 - `tail_match` の runtime 挙動そのものは維持される。
 - 終了コード体系は拡張せず、既存の `23` を再利用する。
+
+## Remediation Scope Freeze (2026-02-25)
+
+- remediation scope の findings 運用語彙は `fix` / `accepted` / `no-action` とする。
+- `run_id` 秒粒度の timestamp 命名は accepted risk とし、今回の remediation では仕様・実装を変更しない。
+- init quality gate の強制追加は no-action とし、最小 scaffold 生成方針を維持する。
