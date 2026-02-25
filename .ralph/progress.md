@@ -4,6 +4,7 @@ Started: 2026-02-25
 ## Codebase Patterns
 - During staged config migrations, keep strict YAML key validation by removing old YAML tags and expose temporary in-memory aliases with `json:"-" yaml:"-"` to avoid cross-package breakage.
 - For mode-based loop extensions, keep explicit role overrides authoritative and enable automatic scheduler behavior only when role is unset.
+- For role-based artifact loops, evaluate completion from persisted role artifacts (for example `JUDGE_XXXX.json`) so runtime decisions follow the durable contract, not transient tmp outputs.
 
 ## Progress Entries
 ## [2026-02-25] - [task-1]: Refactor config model to command profiles
@@ -78,4 +79,22 @@ Started: 2026-02-25
     - Review artifact persistence can be layered onto existing temp-output execution by copying role outputs into deterministic review directories.
   - Gotchas encountered
     - Full-suite regressions can occur when auto-scheduling overrides previously explicit role pathways; keeping role override precedence avoids compatibility breaks.
+---
+## [2026-02-25] - [task-5]: Enforce judge JSON contract and convergence completion semantics
+- What was implemented
+  - Added strict judge JSON contract parsing in `internal/runner/judge_contract.go` with required keys (`signal`, `new_findings`, `new_finding_keys`) and type/bounds validation.
+  - Added review convergence decision state in `internal/runner/review_completion.go` to track `stable_count` against `stable_rounds`, `min_reviews`, and `max_reviews`.
+  - Wired review-mode completion in `internal/runner/loop.go` to parse persisted judge artifacts, return exit `0` on stable convergence, and return exit `23` on non-convergence at `max_reviews`.
+  - Added `internal/runner/judge_contract_test.go` and extended `internal/runner/loop_test.go` with `TestReviewConvergenceStableRounds`, `TestReviewNonConvergenceReturns23`, and `TestReviewLogsRemainFreeForm`.
+  - Updated `internal/runner/review_scheduler_test.go` to keep scheduler assertions valid while judge outputs now require JSON contract compliance.
+- DoD verification results
+  - `go test ./internal/runner -run 'TestJudgeContractValidation|TestReviewConvergenceStableRounds|TestReviewNonConvergenceReturns23|TestReviewLogsRemainFreeForm'`: PASS
+  - `task fmt`: PASS
+  - `task lint`: PASS
+  - `task test`: PASS
+- Learnings:
+  - Patterns discovered
+    - Separating scheduler role selection from completion evaluation keeps review loop control flow testable while adding convergence semantics.
+  - Gotchas encountered
+    - Repository-local Go module caches contain read-only files from toolchain downloads; cleanup requires `chmod -R u+w` before deletion in sandboxed runs.
 ---
