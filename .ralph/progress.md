@@ -4,6 +4,7 @@ Started: 2026-02-25
 ## Codebase Patterns
 - Prefer a template manifest (`output path`, `template path`, `render`) plus one shared write pipeline for consistent scaffold diagnostics.
 - Classify loader failures into `parse` vs `validation` error kinds so runner exit mapping can stay deterministic.
+- Hide external command execution behind package-local interfaces so behavior can be tested with strict command-order assertions instead of shelling out in tests.
 
 ## Progress Entries
 ## [2026-02-25] - [task-1]: Bootstrap `ralph init` scaffolding
@@ -97,4 +98,21 @@ Started: 2026-02-25
     - Modeling phase execution around an explicit `success()/failure()` state flag makes `on_fail=continue` semantics straightforward across step chains.
   - Gotchas encountered
     - Repository lint rules require external-package tests (`runner_test`), static wrapped errors, and stricter test-file permissions (`0o600`) even for temp fixture files.
+---
+## [2026-02-25] - [task-5]: Implement builtin `uses: auto_commit`
+- What was implemented
+  - Added `internal/git` auto-commit orchestration with split/together strategies, staged-diff no-op handling, and fallback commit message behavior.
+  - Implemented `${task_id}` extraction from `.ralph/prd.json` before/after snapshots, enforcing exactly one `false -> true` transition for split `.ralph/` commits.
+  - Integrated `uses: auto_commit` execution in `internal/runner` with per-iteration PRD snapshots and `.ralph/.commit-msg` path wiring.
+  - Added tests for split staging order (`.ralph/` first), together-mode all-files staging, extraction ambiguity constraints, empty staged diff no-op, and `.commit-msg` file vs fallback selection.
+- DoD verification results
+  - `task fmt`: pass
+  - `task lint`: pass
+  - `task test`: pass
+  - `task check`: pass
+- Learnings:
+  - Patterns discovered
+    - A dedicated command-runner interface makes git orchestration testable without relying on live repository state.
+  - Gotchas encountered
+    - `wrapcheck` enforcement requires explicit error wrapping at external package call boundaries (git runner + builtin dispatch).
 ---
