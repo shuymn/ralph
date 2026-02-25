@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	ralphprd "github.com/shuymn/ralph/internal/prd"
@@ -25,8 +26,11 @@ const (
 var (
 	errUnsupportedCommitMode = errors.New("unsupported git commit mode")
 	errGitDiffStagedFailed   = errors.New("git diff --cached --quiet --exit-code failed")
+	errGitDiffNameOnlyFailed = errors.New("git diff --cached --name-only failed")
 	errGitCommandFailed      = errors.New("git command failed")
 	errReadCommitMessageFile = errors.New("read commit message file")
+	errRemoveCommitMsgFile   = errors.New("remove commit message file")
+	errInvalidCommitMsgPath  = errors.New("invalid commit message path")
 	errReadPRDForTaskID      = errors.New("read prd for task_id extraction")
 	errValidatePRDForTaskID  = errors.New("validate prd for task_id extraction")
 )
@@ -68,7 +72,37 @@ func AutoCommit(ctx context.Context, opts Options) error {
 }
 
 func autoCommitSplit(ctx context.Context, opts Options) error {
+	source, err := resolveCommitMessageSource(opts.CommitMessagePath, opts.FallbackMessage)
+	if err != nil {
+		return err
+	}
+
+	commitMsgPathspec, err := commitMessagePathspec(opts.WorkingDir, opts.CommitMessagePath)
+	if err != nil {
+		return err
+	}
+
+	if err := runGitExpectSuccess(ctx, opts, "add", "-A"); err != nil {
+		return err
+	}
+	if err := runGitExpectSuccess(ctx, opts, "restore", "--staged", ralphOnlyPath); err != nil {
+		return err
+	}
+
+	otherChanged, err := hasStagedDiff(ctx, opts)
+	if err != nil {
+		return err
+	}
+	if otherChanged {
+		if err := commitWithSource(ctx, opts, source); err != nil {
+			return err
+		}
+	}
+
 	if err := runGitExpectSuccess(ctx, opts, "add", "-A", ralphOnlyPath); err != nil {
+		return err
+	}
+	if err := unstagePathIfStaged(ctx, opts, commitMsgPathspec); err != nil {
 		return err
 	}
 
@@ -93,26 +127,24 @@ func autoCommitSplit(ctx context.Context, opts Options) error {
 		}
 	}
 
-	if err := runGitExpectSuccess(ctx, opts, "add", "-A"); err != nil {
-		return err
-	}
-	if err := runGitExpectSuccess(ctx, opts, "restore", "--staged", ralphOnlyPath); err != nil {
-		return err
-	}
-
-	otherChanged, err := hasStagedDiff(ctx, opts)
-	if err != nil {
-		return err
-	}
-	if !otherChanged {
-		return nil
-	}
-
-	return commitNonRalphChanges(ctx, opts)
+	return removeCommitMessageFile(opts.CommitMessagePath)
 }
 
 func autoCommitTogether(ctx context.Context, opts Options) error {
+	source, err := resolveCommitMessageSource(opts.CommitMessagePath, opts.FallbackMessage)
+	if err != nil {
+		return err
+	}
+
+	commitMsgPathspec, err := commitMessagePathspec(opts.WorkingDir, opts.CommitMessagePath)
+	if err != nil {
+		return err
+	}
+
 	if err := runGitExpectSuccess(ctx, opts, "add", "-A"); err != nil {
+		return err
+	}
+	if err := unstagePathIfStaged(ctx, opts, commitMsgPathspec); err != nil {
 		return err
 	}
 
@@ -121,22 +153,102 @@ func autoCommitTogether(ctx context.Context, opts Options) error {
 		return err
 	}
 	if !stagedChanges {
-		return nil
+		return removeCommitMessageFile(opts.CommitMessagePath)
 	}
 
-	return commitNonRalphChanges(ctx, opts)
-}
-
-func commitNonRalphChanges(ctx context.Context, opts Options) error {
-	source, err := resolveCommitMessageSource(opts.CommitMessagePath, opts.FallbackMessage)
-	if err != nil {
+	if err := commitWithSource(ctx, opts, source); err != nil {
 		return err
 	}
+	return removeCommitMessageFile(opts.CommitMessagePath)
+}
 
+func commitWithSource(
+	ctx context.Context,
+	opts Options,
+	source commitMessageSource,
+) error {
 	if source.useFile {
 		return runGitExpectSuccess(ctx, opts, "commit", "-F", source.value)
 	}
 	return runGitExpectSuccess(ctx, opts, "commit", "-m", source.value)
+}
+
+func unstagePathIfStaged(ctx context.Context, opts Options, pathspec string) error {
+	staged, err := hasStagedDiffForPath(ctx, opts, pathspec)
+	if err != nil {
+		return err
+	}
+	if !staged {
+		return nil
+	}
+	return runGitExpectSuccess(ctx, opts, "restore", "--staged", pathspec)
+}
+
+func hasStagedDiffForPath(ctx context.Context, opts Options, pathspec string) (bool, error) {
+	result, err := opts.Runner.Run(
+		ctx,
+		opts.WorkingDir,
+		"diff",
+		"--cached",
+		"--name-only",
+		"--",
+		pathspec,
+	)
+	if err != nil {
+		return false, fmt.Errorf("%w: %w", errGitDiffNameOnlyFailed, err)
+	}
+	if result.ExitCode != 0 {
+		reason := strings.TrimSpace(result.Stderr)
+		if reason == "" {
+			reason = strings.TrimSpace(result.Stdout)
+		}
+		if reason == "" {
+			return false, fmt.Errorf(
+				"%w: exit_code=%d",
+				errGitDiffNameOnlyFailed,
+				result.ExitCode,
+			)
+		}
+		return false, fmt.Errorf(
+			"%w: exit_code=%d reason=%s",
+			errGitDiffNameOnlyFailed,
+			result.ExitCode,
+			reason,
+		)
+	}
+	return strings.TrimSpace(result.Stdout) != "", nil
+}
+
+func commitMessagePathspec(workingDir, commitMessagePath string) (string, error) {
+	path := strings.TrimSpace(commitMessagePath)
+	if path == "" {
+		return "", fmt.Errorf("%w: commit message path is empty", errInvalidCommitMsgPath)
+	}
+
+	relPath, err := filepath.Rel(workingDir, path)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", errInvalidCommitMsgPath, err)
+	}
+	if relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf(
+			"%w: path=%q working_dir=%q",
+			errInvalidCommitMsgPath,
+			commitMessagePath,
+			workingDir,
+		)
+	}
+	return filepath.ToSlash(relPath), nil
+}
+
+func removeCommitMessageFile(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	err := os.Remove(path)
+	if err == nil || errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return fmt.Errorf("%w: %w", errRemoveCommitMsgFile, err)
 }
 
 func hasStagedDiff(ctx context.Context, opts Options) (bool, error) {
