@@ -146,16 +146,16 @@ func applyDefaults(cfg *Config) {
 		cfg.Completion.Review.Signal = DefaultCompletionSignal
 	}
 	review := &cfg.Completion.Review.ReviewConvergence
-	if review.MinReviews == 0 {
+	if !review.minReviewsExplicit && review.MinReviews == 0 {
 		review.MinReviews = DefaultReviewMinReviews
 	}
-	if review.MaxReviews == 0 {
+	if !review.maxReviewsExplicit && review.MaxReviews == 0 {
 		review.MaxReviews = DefaultReviewMaxReviews
 	}
-	if review.JudgeEvery == 0 {
+	if !review.judgeEveryExplicit && review.JudgeEvery == 0 {
 		review.JudgeEvery = DefaultReviewJudgeEvery
 	}
-	if review.StableRounds == 0 {
+	if !review.stableRoundsExplicit && review.StableRounds == 0 {
 		review.StableRounds = DefaultReviewStableRounds
 	}
 

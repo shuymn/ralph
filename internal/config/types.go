@@ -62,6 +62,11 @@ type ReviewConvergenceMode struct {
 	MaxReviews   int `json:"max_reviews,omitempty"   yaml:"max_reviews"`   //nolint:tagliatelle // External schema key uses snake_case.
 	JudgeEvery   int `json:"judge_every,omitempty"   yaml:"judge_every"`   //nolint:tagliatelle // External schema key uses snake_case.
 	StableRounds int `json:"stable_rounds,omitempty" yaml:"stable_rounds"` //nolint:tagliatelle // External schema key uses snake_case.
+
+	minReviewsExplicit   bool `json:"-" yaml:"-"`
+	maxReviewsExplicit   bool `json:"-" yaml:"-"`
+	judgeEveryExplicit   bool `json:"-" yaml:"-"`
+	stableRoundsExplicit bool `json:"-" yaml:"-"`
 }
 
 type Git struct {

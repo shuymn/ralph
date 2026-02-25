@@ -470,6 +470,25 @@ completion:
 			wantErr: "completion.review.review_convergence.min_reviews must be >= 1",
 		},
 		{
+			name: "min_reviews zero must be rejected when explicitly set",
+			yaml: `
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  run:
+    strategy: tail_match
+  review:
+    strategy: review_convergence
+    review_convergence:
+      min_reviews: 0
+      max_reviews: 10
+      judge_every: 2
+      stable_rounds: 2
+`,
+			wantErr: "completion.review.review_convergence.min_reviews must be >= 1",
+		},
+		{
 			name: "max_reviews must be >= min_reviews",
 			yaml: `
 version: "1"
@@ -483,6 +502,25 @@ completion:
     review_convergence:
       min_reviews: 4
       max_reviews: 3
+      judge_every: 2
+      stable_rounds: 2
+`,
+			wantErr: "completion.review.review_convergence.max_reviews must be >= min_reviews",
+		},
+		{
+			name: "max_reviews zero must be rejected when explicitly set",
+			yaml: `
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  run:
+    strategy: tail_match
+  review:
+    strategy: review_convergence
+    review_convergence:
+      min_reviews: 1
+      max_reviews: 0
       judge_every: 2
       stable_rounds: 2
 `,
@@ -508,6 +546,25 @@ completion:
 			wantErr: "completion.review.review_convergence.judge_every must be >= 1",
 		},
 		{
+			name: "judge_every zero must be rejected when explicitly set",
+			yaml: `
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  run:
+    strategy: tail_match
+  review:
+    strategy: review_convergence
+    review_convergence:
+      min_reviews: 3
+      max_reviews: 10
+      judge_every: 0
+      stable_rounds: 2
+`,
+			wantErr: "completion.review.review_convergence.judge_every must be >= 1",
+		},
+		{
 			name: "stable_rounds must be positive",
 			yaml: `
 version: "1"
@@ -523,6 +580,25 @@ completion:
       max_reviews: 10
       judge_every: 2
       stable_rounds: -1
+`,
+			wantErr: "completion.review.review_convergence.stable_rounds must be >= 1",
+		},
+		{
+			name: "stable_rounds zero must be rejected when explicitly set",
+			yaml: `
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  run:
+    strategy: tail_match
+  review:
+    strategy: review_convergence
+    review_convergence:
+      min_reviews: 3
+      max_reviews: 10
+      judge_every: 2
+      stable_rounds: 0
 `,
 			wantErr: "completion.review.review_convergence.stable_rounds must be >= 1",
 		},
