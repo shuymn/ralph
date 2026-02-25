@@ -14,6 +14,7 @@ import (
 
 	"github.com/shuymn/ralph/internal/condition"
 	"github.com/shuymn/ralph/internal/config"
+	ralphgit "github.com/shuymn/ralph/internal/git"
 	"github.com/shuymn/ralph/internal/prd"
 )
 
@@ -33,6 +34,7 @@ const (
 	configFileName = "config.yml"
 	promptFileName = "prompt.md"
 	prdFileName    = "prd.json"
+	commitMsgFile  = ".commit-msg"
 )
 
 var errUnsupportedBuiltin = errors.New("unsupported builtin")
@@ -51,6 +53,13 @@ type Options struct {
 type compiledStep struct {
 	ConfigStep config.StepConfig
 	Condition  condition.Expression
+}
+
+type builtinContext struct {
+	Git               config.GitConfig
+	CommitMessagePath string
+	PRDPath           string
+	BeforePRD         prd.Document
 }
 
 func Run(opts Options) int {
@@ -102,12 +111,26 @@ func runLoop(
 			return ExitCodeStopLoop
 		}
 
+		beforePRD, err := prd.Load(opts.PRDPath)
+		if err != nil {
+			logError(opts.Stderr, err)
+			return ExitCodeConfigError
+		}
+
+		builtinOpts := builtinContext{
+			Git:               cfg.Git,
+			CommitMessagePath: filepath.Join(opts.WorkDir, ralphDirName, commitMsgFile),
+			PRDPath:           opts.PRDPath,
+			BeforePRD:         beforePRD,
+		}
+
 		preResult, err := executePhase(
 			ctx,
 			opts.WorkDir,
 			phasePre,
 			preSteps,
 			true,
+			builtinOpts,
 			opts.Stdout,
 			opts.Stderr,
 		)
@@ -136,6 +159,7 @@ func runLoop(
 			phasePost,
 			postSteps,
 			mainResult.Success,
+			builtinOpts,
 			opts.Stdout,
 			opts.Stderr,
 		)
@@ -205,6 +229,7 @@ func executePhase(
 	phaseName string,
 	steps []compiledStep,
 	phaseSuccess bool,
+	builtins builtinContext,
 	stdout io.Writer,
 	stderr io.Writer,
 ) (phaseResult, error) {
@@ -227,7 +252,14 @@ func executePhase(
 			continue
 		}
 
-		if err := runStep(ctx, workDir, step.ConfigStep, stdout, stderr); err != nil {
+		if err := runStep(
+			ctx,
+			workDir,
+			step.ConfigStep,
+			builtins,
+			stdout,
+			stderr,
+		); err != nil {
 			stateSuccess = false
 			if step.ConfigStep.OnFail == config.OnFailContinue {
 				continue
@@ -245,6 +277,7 @@ func runStep(
 	ctx context.Context,
 	workDir string,
 	step config.StepConfig,
+	builtins builtinContext,
 	stdout io.Writer,
 	stderr io.Writer,
 ) error {
@@ -252,7 +285,7 @@ func runStep(
 		return runShellStep(ctx, workDir, step.Run, stdout, stderr)
 	}
 
-	return runBuiltinStep(step)
+	return runBuiltinStep(ctx, workDir, step, builtins)
 }
 
 func runShellStep(
@@ -274,9 +307,25 @@ func runShellStep(
 	return nil
 }
 
-func runBuiltinStep(step config.StepConfig) error {
+func runBuiltinStep(
+	ctx context.Context,
+	workDir string,
+	step config.StepConfig,
+	builtins builtinContext,
+) error {
 	if step.Uses != config.BuiltinAutoCommit {
 		return fmt.Errorf("%w: %q", errUnsupportedBuiltin, step.Uses)
+	}
+
+	if err := ralphgit.AutoCommit(ctx, ralphgit.AutoCommitOptions{
+		WorkDir:           workDir,
+		Mode:              builtins.Git.Commit,
+		FallbackMessage:   builtins.Git.FallbackMessage,
+		CommitMessagePath: builtins.CommitMessagePath,
+		PRDPath:           builtins.PRDPath,
+		BeforePRD:         builtins.BeforePRD,
+	}); err != nil {
+		return fmt.Errorf("run auto_commit builtin: %w", err)
 	}
 
 	return nil
