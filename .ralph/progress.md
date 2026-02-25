@@ -21,3 +21,21 @@ Started: 2026-02-25
   - Gotchas encountered
     - The planned RED grep initially passed because markers already existed in the remediation plan file; a minimal target correction (design+ADR only) was required to establish executable RED.
 ---
+## [2026-02-25] - [task-2]: Fix Review Completion Routing for Explicit Roles
+- What was implemented
+  - Switched review-runtime activation to be mode-based (`ModeReview`) while keeping role scheduling gated to "role unset", so explicit `RoleReview`/`RoleJudge` still use review completion semantics.
+  - Added judge fail-fast handling: non-zero judge command exits now return runtime error and are never counted toward convergence.
+  - Added RED/GREEN regression coverage for explicit-role review completion routing and judge non-zero convergence behavior.
+  - Updated the existing role-command fallback test to validate command fallback behavior without relying on run-mode completion semantics in review mode.
+- DoD verification results
+  - PASS: `go test ./internal/runner -run 'TestReviewExplicitRoleUsesReviewCompletion|TestReviewJudgeNonZeroDoesNotConverge'`
+  - PASS: `task fmt`
+  - PASS: `task lint`
+  - PASS: `task test`
+  - PASS: `task build`
+- Learnings:
+  - Patterns discovered
+    - In review mode, completion routing should be keyed by mode contract while scheduler activation stays keyed by explicit-role presence.
+  - Gotchas encountered
+    - Existing tests that asserted exit `0` for explicit review roles were implicitly coupled to run-mode completion and needed role-mode-appropriate assertions.
+---
