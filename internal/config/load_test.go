@@ -146,6 +146,56 @@ phases:
 	assertErrorCode(t, err, ralphconfig.ErrCodeConfigGitCommit)
 }
 
+func TestLoadBytesRejectsMissingRunCommand(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name       string
+		agentBlock string
+	}{
+		{
+			name:       "missing agent block",
+			agentBlock: "",
+		},
+		{
+			name: "missing run_command field",
+			agentBlock: `
+agent:
+  sleep_seconds: 5
+`,
+		},
+		{
+			name: "blank run_command value",
+			agentBlock: `
+agent:
+  run_command: "   "
+`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			content := `
+version: "1"
+` + tc.agentBlock + `
+git:
+  commit: split
+phases:
+  pre:
+    steps: []
+  post:
+    steps: []
+`
+
+			_, err := ralphconfig.LoadBytes([]byte(content))
+			assertErrorCode(t, err, ralphconfig.ErrCodeConfigParse)
+			assertErrorContains(t, err, "agent.run_command is required")
+		})
+	}
+}
+
 func TestLoadBytesAppliesFallbackNoGPGSign(t *testing.T) {
 	t.Parallel()
 

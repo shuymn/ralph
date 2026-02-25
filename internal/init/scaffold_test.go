@@ -209,6 +209,52 @@ func TestScaffoldSkipsExistingFilesAndReportsToStderr(t *testing.T) {
 	}
 }
 
+func TestScaffoldPreservesExistingPromptAndPRD(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	ralphDir := filepath.Join(root, ".ralph")
+	if err := os.MkdirAll(ralphDir, 0o755); err != nil {
+		t.Fatalf("failed creating .ralph directory: %v", err)
+	}
+
+	existingFiles := map[string]string{
+		"prompt.run.md":    "existing run prompt\n",
+		"prompt.review.md": "existing review prompt\n",
+		"prompt.judge.md":  "existing judge prompt\n",
+		"prd.json":         "{\"project\":\"existing\"}\n",
+	}
+	for filename, content := range existingFiles {
+		if err := os.WriteFile(
+			filepath.Join(ralphDir, filename),
+			[]byte(content),
+			0o600,
+		); err != nil {
+			t.Fatalf("failed writing existing %s: %v", filename, err)
+		}
+	}
+
+	var stderr bytes.Buffer
+	fixed := time.Date(2026, time.February, 25, 12, 0, 0, 0, time.UTC)
+
+	if err := ralphinit.Scaffold(root, fixed, &stderr); err != nil {
+		t.Fatalf("Scaffold returned error: %v", err)
+	}
+
+	for filename, want := range existingFiles {
+		got, err := os.ReadFile(filepath.Join(ralphDir, filename))
+		if err != nil {
+			t.Fatalf("failed reading %s: %v", filename, err)
+		}
+		if string(got) != want {
+			t.Fatalf("expected existing %s to remain unchanged, got: %q", filename, string(got))
+		}
+		if !strings.Contains(stderr.String(), ".ralph/"+filename) {
+			t.Fatalf("stderr missing skipped %s path, got: %s", filename, stderr.String())
+		}
+	}
+}
+
 func TestScaffoldDocumentationListsSchemaWorkflow(t *testing.T) {
 	t.Parallel()
 
@@ -229,6 +275,28 @@ func TestScaffoldDocumentationListsSchemaWorkflow(t *testing.T) {
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(text, snippet) {
 			t.Fatalf("AGENTS.md must include schema workflow snippet %q", snippet)
+		}
+	}
+}
+
+func TestReadmeClarifiesFallbackNoGPGSignDefaultAndScaffoldSample(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := mustRepoRoot(t)
+	readmePath := filepath.Join(repoRoot, "README.md")
+	content, err := os.ReadFile(readmePath)
+	if err != nil {
+		t.Fatalf("failed reading README.md: %v", err)
+	}
+
+	text := string(content)
+	requiredSnippets := []string{
+		"default when omitted",
+		"scaffold sample",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(text, snippet) {
+			t.Fatalf("README.md must include %q", snippet)
 		}
 	}
 }

@@ -122,7 +122,10 @@ phases:
         on_fail: stop_loop
 ```
 
-Default values (when omitted):
+The `git` section above is a scaffold sample. It shows `fallback_no_gpg_sign: true` as
+an explicit example value in generated config.
+
+Default values (`default when omitted`):
 
 - `agent.max_iterations`: `60`
 - `agent.sleep_seconds`: `5`
