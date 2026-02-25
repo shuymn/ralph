@@ -36,6 +36,7 @@ Proposed
 - `stable_rounds` 連続で安定判定成立、かつ `min_reviews` 以上で完了（exit `0`）
 - `max_reviews` 到達時に未収斂なら exit `23`
 - `phases.pre` / `phases.post` は `run` 専用とし、`review` では実行しない
+- review scope 解決は `prd.plan` が指す plan.md を SoT とし、`stories[].passes/deps` をレビュー対象選択に使わない
 - `review` / `judge` の stderr ログは v1 では自由形式とし、固定キー契約は設けない
 - `ralph init` は prompt を 3 分割で生成する（`prompt.run.md`, `prompt.review.md`, `prompt.judge.md`）
   - `prompt.md` は生成しない

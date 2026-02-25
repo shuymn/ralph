@@ -19,36 +19,36 @@ You are the `review` role in review convergence mode.
 
 ## Objective (Required: Do Not Remove)
 
-- Review the selected story implementation for bugs, regressions, risks, and missing tests.
+- Review the implementation against the resolved plan scope for bugs, regressions, risks, and missing tests.
 - Re-run the review from a fresh perspective each round.
 - Produce a Markdown report that is easy to compare across rounds.
 
 ## Story Scope Resolution (Required: Do Not Remove)
 
-Resolve "selected story" before reviewing:
+Resolve review scope before reviewing:
 1. Read `.ralph/prd.json`.
 2. Resolve the plan file path:
    - If top-level `plan` is a non-empty string, use that file.
    - Otherwise use the active plan file under `docs/plans/`.
-3. Read `.ralph/progress.md` to understand recent implementation context.
-4. Select the highest-priority story where:
-   - `passes: false`
-   - all `deps` stories have `passes: true`
-5. Priority rule: choose the lowest numeric story ID among eligible stories.
-6. Review against that story's scope and DoD in the resolved plan.
+3. Read the resolved plan file and determine review scope from its requirements and DoD.
+4. Do not use `stories[].passes` or `stories[].deps` for review target selection.
+5. Treat `stories` as optional context only (for IDs/titles), not as review gating criteria.
+6. Read `.ralph/progress.md` to understand recent implementation context.
+7. Review against the resolved plan scope and DoD.
 
 ## Review Focus (Customize Allowed)
 
 - Correctness and behavior regressions
 - Error handling and edge cases
 - Test coverage gaps
-- Scope drift from the selected story
+- Scope drift from the resolved plan requirements and DoD
 
 ## Constraints (Required: Do Not Remove)
 
 - Do not rely on prior `REVIEW_*.md` or `JUDGE_*.json` files; treat this round as independent.
 - Keep findings evidence-based and actionable.
 - Do not add unrequested feature proposals.
+- Do not emit findings about "no eligible story" based on `stories[].passes`/`deps`; those fields are not review selectors.
 
 ## Output Contract (Required: Do Not Remove)
 

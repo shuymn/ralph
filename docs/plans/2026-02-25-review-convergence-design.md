@@ -56,6 +56,7 @@ CLI は `ralph run` と `ralph review` の 2 サブコマンドを提供する�
 | judge の判定出力形式は？ | `JUDGE_n.json` を出力し、`ralph` が strict parse して判定に使う。 | signal 単独より再現性の高い収斂判定が可能。 | resolved |
 | `new_finding_keys` は必須か？ | v1 で必須。 | 差分追跡の再現性を上げる。 | resolved |
 | `review`/`judge` のログ形式は標準化するか？ | v1 は自由形式ログで運用し、固定項目は定義しない。 | 実装初期の拘束を減らし、運用結果を見て後続で標準化する。 | resolved |
+| review scope は `stories[].passes/deps` で選ぶか？ | いいえ。review scope は `prd.plan` が指す plan.md を唯一の SoT とし、`stories` は参考情報のみ。 | 「eligible story なし」を誤検出するノイズを防ぎ、レビュー対象を実装コードに集中できる。 | resolved |
 | `ralph init` の prompt 構成は？ | `.ralph/prompt.run.md` / `.ralph/prompt.review.md` / `.ralph/prompt.judge.md` を生成し、`.ralph/prompt.md` は生成しない。 | run/review の入力責務が明確になる。 | resolved |
 | `ralph init` の config はどこまで生成する？ | `completion.run` と `completion.review` の両 profile を初期生成する。 | 生成直後から run/review を同一 config で使える。 | resolved |
 | `ralph init` で `review_command` / `judge_command` は出力する？ | `config.tmpl` では省略し、必要時のみ利用者が追加する。 | 最小構成を維持しつつ拡張可能。 | resolved |
@@ -212,6 +213,7 @@ judge role 実行結果（`JUDGE_n.json`）を parse して、次を満たすと
 `review` role の「まっさら」要件について:
 
 - runner は `review` role への標準入力を `.ralph/prompt.review.md` のみに固定する
+- review prompt は `prd.plan` が指す plan.md を scope の SoT とし、`stories[].passes/deps` による対象選択を行わない
 - ただしワークスペース内ファイルの参照自体は command 側の振る舞いに依存するため、厳密制御は prompt 規約で担保する
 
 ### 9. Dry-run / Validation
