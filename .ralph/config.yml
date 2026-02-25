@@ -13,7 +13,7 @@ completion:
     strategy: review_convergence
     signal: "<promise>COMPLETE</promise>"
     review_convergence:
-      min_reviews: 3
+      min_reviews: 2
       max_reviews: 10
       judge_every: 2
       stable_rounds: 2

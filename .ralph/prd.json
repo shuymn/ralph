@@ -7,7 +7,7 @@
       "id": "task-1",
       "title": "Scope Freeze and Design Record Sync",
       "deps": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "task-2",
