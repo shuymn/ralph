@@ -226,8 +226,13 @@ func TestRoleCommandFallback(t *testing.T) {
 			stdinCapture := filepath.Join(root, ".ralph", "main-input.txt")
 			cfg := testConfig("", nil, nil)
 			cfg.Agent.RunCommand = fmt.Sprintf(
-				"cat > %s; printf '%s\\n'",
+				"input=$(cat); "+
+					"printf '%%s\\n' \"$input\" > %s; "+
+					"if [ \"$input\" = %s ]; then "+
+					"printf '{\"signal\":\"%s\",\"new_findings\":1,\"new_finding_keys\":[\"F1\"]}\\n'; "+
+					"else printf 'review iteration\\n'; fi",
 				shQuote(stdinCapture),
+				shQuote("judge prompt"),
 				ralphconfig.DefaultCompletionSignal,
 			)
 			cfg.Agent.ReviewCommand = ""
@@ -257,8 +262,12 @@ func TestRoleCommandFallback(t *testing.T) {
 				Mode:       ralphrunner.ModeReview,
 				Role:       tc.role,
 			})
-			if code != 0 {
-				t.Fatalf("expected exit code 0, got %d", code)
+			if code != ralphrunner.ExitCodeMaxIterations {
+				t.Fatalf(
+					"expected exit code %d, got %d",
+					ralphrunner.ExitCodeMaxIterations,
+					code,
+				)
 			}
 
 			got := readFile(t, stdinCapture)
@@ -508,6 +517,89 @@ func TestReviewNonConvergenceReturns23(t *testing.T) {
 			ralphrunner.ExitCodeMaxIterations,
 			code,
 		)
+	}
+}
+
+func TestReviewExplicitRoleUsesReviewCompletion(t *testing.T) {
+	t.Parallel()
+
+	root, tmpDir := setupWorkspace(
+		t,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":true,"deps":[]}]}`,
+		"prompt-run\n",
+	)
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.review.md"), "review output\n")
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.judge.md"), "judge output\n")
+
+	cfg := testConfig("printf '"+ralphconfig.DefaultCompletionSignal+"\\n'", nil, nil)
+	cfg.Agent.MaxIterations = 1
+
+	var stderr bytes.Buffer
+	code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+		WorkingDir: root,
+		Stdout:     io.Discard,
+		Stderr:     &stderr,
+		TempDir:    tmpDir,
+		Sleep:      func(time.Duration) {},
+		Mode:       ralphrunner.ModeReview,
+		Role:       ralphrunner.RoleJudge,
+	})
+	if code != ralphrunner.ExitCodeRuntime {
+		t.Fatalf("expected runtime exit code %d, got %d", ralphrunner.ExitCodeRuntime, code)
+	}
+	if !strings.Contains(stderr.String(), "parse judge contract") {
+		t.Fatalf("expected review completion to parse judge contract, got %q", stderr.String())
+	}
+}
+
+func TestReviewJudgeNonZeroDoesNotConverge(t *testing.T) {
+	t.Parallel()
+
+	root, tmpDir := setupWorkspace(
+		t,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+		"prompt-run\n",
+	)
+	const (
+		reviewPrompt = "REVIEW_ROLE_PROMPT"
+		judgePrompt  = "JUDGE_ROLE_PROMPT"
+	)
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.review.md"), reviewPrompt+"\n")
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.judge.md"), judgePrompt+"\n")
+
+	cfg := testConfig(
+		fmt.Sprintf(
+			"input=$(cat); if [ \"$input\" = %s ]; then "+
+				"printf '{\"signal\":\"READY\",\"new_findings\":0,\"new_finding_keys\":[]}\\n'; "+
+				"exit 1; fi; printf 'review\\n'",
+			shQuote(judgePrompt),
+		),
+		nil,
+		nil,
+	)
+	cfg.Agent.MaxIterations = 3
+	cfg.Completion.Review.Signal = "READY"
+	cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{
+		MinReviews:   1,
+		MaxReviews:   2,
+		JudgeEvery:   1,
+		StableRounds: 1,
+	}
+
+	var stderr bytes.Buffer
+	code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+		WorkingDir: root,
+		Stdout:     io.Discard,
+		Stderr:     &stderr,
+		TempDir:    tmpDir,
+		Sleep:      func(time.Duration) {},
+		Mode:       ralphrunner.ModeReview,
+	})
+	if code != ralphrunner.ExitCodeRuntime {
+		t.Fatalf("expected runtime exit code %d, got %d", ralphrunner.ExitCodeRuntime, code)
+	}
+	if !strings.Contains(stderr.String(), "judge command failed") {
+		t.Fatalf("expected judge command failure in stderr, got %q", stderr.String())
 	}
 }
 

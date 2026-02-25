@@ -38,6 +38,7 @@ const (
 var (
 	errUnsupportedUsesStep      = errors.New("unsupported uses step")
 	errJudgeArtifactPathMissing = errors.New("judge artifact path must not be empty")
+	errJudgeCommandFailed       = errors.New("judge command failed")
 )
 
 type Options struct {
@@ -104,10 +105,10 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 		logRuntimeError(opts.Stderr, err)
 		return ExitCodeRuntime
 	}
+	reviewMode := modePlan.Mode == ModeReview
 	var reviewRuntimeState *reviewRuntime
-	enableReviewScheduler := modePlan.Mode == ModeReview &&
-		strings.TrimSpace(string(opts.Role)) == ""
-	if enableReviewScheduler {
+	enableReviewScheduler := reviewMode && strings.TrimSpace(string(opts.Role)) == ""
+	if reviewMode {
 		runtime := newReviewRuntime(
 			paths,
 			cfg.Completion.Review,
@@ -152,7 +153,7 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			return ExitCodeRuntime
 		}
 		iterationPlan := modePlan
-		if reviewRuntimeState != nil {
+		if enableReviewScheduler {
 			scheduledRole := nextReviewRole(
 				reviewRuntimeState.state,
 				reviewRuntimeState.config,
@@ -489,6 +490,9 @@ func completeReviewIteration(
 
 	if role != RoleJudge {
 		return noExitCode, nil
+	}
+	if !mainResult.Success {
+		return noExitCode, errJudgeCommandFailed
 	}
 	if artifactPath == "" {
 		return noExitCode, errJudgeArtifactPathMissing
