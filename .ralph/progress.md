@@ -39,3 +39,21 @@ Started: 2026-02-25
   - Gotchas encountered
     - Existing tests that asserted exit `0` for explicit review roles were implicitly coupled to run-mode completion and needed role-mode-appropriate assertions.
 ---
+## [2026-02-25] - [task-3]: Fix Partial Defaulting in `review_convergence`
+- What was implemented
+  - Added RED regression tests for partial `completion.review.review_convergence` overrides and single-field overrides to ensure omitted sibling fields are defaulted.
+  - Switched `applyDefaults` in `internal/config/validate.go` to field-by-field default filling for `min_reviews`, `max_reviews`, `judge_every`, and `stable_rounds`.
+  - Refactored duplicated assertions in new tests into `assertReviewConvergenceValues` to satisfy lint duplication checks.
+  - Updated invalid-bound tests to use negative values so lower-bound validation remains covered under the partial-defaulting model.
+- DoD verification results
+  - PASS: `go test ./internal/config -run 'TestLoadBytesAppliesReviewConvergencePartialDefaults|TestLoadBytesReviewConvergenceSingleFieldOverrides'`
+  - PASS: `task fmt`
+  - PASS: `task lint`
+  - PASS: `task test`
+  - PASS: `task build`
+- Learnings:
+  - Patterns discovered
+    - For optional numeric sub-objects decoded into value fields, omission-safe defaults should be applied per field rather than only on full-struct zero checks.
+  - Gotchas encountered
+    - Legacy tests that asserted explicit `0` rejection conflicted with omission defaulting semantics in non-pointer numeric fields and needed boundary assertions anchored on negative values.
+---
