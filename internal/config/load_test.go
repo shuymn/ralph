@@ -384,118 +384,12 @@ completion:
 
 func TestLoadBytesAppliesReviewConvergencePartialDefaults(t *testing.T) {
 	t.Parallel()
-
-	testCases := []struct {
-		name              string
-		reviewConvergence string
-		wantMinReviews    int
-		wantMaxReviews    int
-		wantJudgeEvery    int
-		wantStableRounds  int
-	}{
-		{
-			name: "min_reviews only",
-			reviewConvergence: `
-      min_reviews: 4
-`,
-			wantMinReviews:   4,
-			wantMaxReviews:   ralphconfig.DefaultReviewMaxReviews,
-			wantJudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
-			wantStableRounds: ralphconfig.DefaultReviewStableRounds,
-		},
-		{
-			name: "max_reviews only",
-			reviewConvergence: `
-      max_reviews: 12
-`,
-			wantMinReviews:   ralphconfig.DefaultReviewMinReviews,
-			wantMaxReviews:   12,
-			wantJudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
-			wantStableRounds: ralphconfig.DefaultReviewStableRounds,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			assertReviewConvergenceValues(
-				t,
-				tc.reviewConvergence,
-				tc.wantMinReviews,
-				tc.wantMaxReviews,
-				tc.wantJudgeEvery,
-				tc.wantStableRounds,
-			)
-		})
-	}
+	runReviewConvergenceSingleFieldOverrideCases(t, "")
 }
 
 func TestLoadBytesReviewConvergenceSingleFieldOverrides(t *testing.T) {
 	t.Parallel()
-
-	testCases := []struct {
-		name              string
-		reviewConvergence string
-		wantMinReviews    int
-		wantMaxReviews    int
-		wantJudgeEvery    int
-		wantStableRounds  int
-	}{
-		{
-			name: "overrides min_reviews only",
-			reviewConvergence: `
-      min_reviews: 4
-`,
-			wantMinReviews:   4,
-			wantMaxReviews:   ralphconfig.DefaultReviewMaxReviews,
-			wantJudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
-			wantStableRounds: ralphconfig.DefaultReviewStableRounds,
-		},
-		{
-			name: "overrides max_reviews only",
-			reviewConvergence: `
-      max_reviews: 12
-`,
-			wantMinReviews:   ralphconfig.DefaultReviewMinReviews,
-			wantMaxReviews:   12,
-			wantJudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
-			wantStableRounds: ralphconfig.DefaultReviewStableRounds,
-		},
-		{
-			name: "overrides judge_every only",
-			reviewConvergence: `
-      judge_every: 3
-`,
-			wantMinReviews:   ralphconfig.DefaultReviewMinReviews,
-			wantMaxReviews:   ralphconfig.DefaultReviewMaxReviews,
-			wantJudgeEvery:   3,
-			wantStableRounds: ralphconfig.DefaultReviewStableRounds,
-		},
-		{
-			name: "overrides stable_rounds only",
-			reviewConvergence: `
-      stable_rounds: 4
-`,
-			wantMinReviews:   ralphconfig.DefaultReviewMinReviews,
-			wantMaxReviews:   ralphconfig.DefaultReviewMaxReviews,
-			wantJudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
-			wantStableRounds: 4,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			assertReviewConvergenceValues(
-				t,
-				tc.reviewConvergence,
-				tc.wantMinReviews,
-				tc.wantMaxReviews,
-				tc.wantJudgeEvery,
-				tc.wantStableRounds,
-			)
-		})
-	}
+	runReviewConvergenceSingleFieldOverrideCases(t, "overrides ")
 }
 
 func TestLoadBytesRejectsInvalidReviewConvergenceBounds(t *testing.T) {
@@ -632,6 +526,74 @@ completion:
 	}
 	if got.StableRounds != wantStableRounds {
 		t.Fatalf("stable_rounds=%d, want %d", got.StableRounds, wantStableRounds)
+	}
+}
+
+func runReviewConvergenceSingleFieldOverrideCases(t *testing.T, namePrefix string) {
+	t.Helper()
+
+	testCases := []struct {
+		name              string
+		reviewConvergence string
+		wantMinReviews    int
+		wantMaxReviews    int
+		wantJudgeEvery    int
+		wantStableRounds  int
+	}{
+		{
+			name: "min_reviews only",
+			reviewConvergence: `
+      min_reviews: 4
+`,
+			wantMinReviews:   4,
+			wantMaxReviews:   ralphconfig.DefaultReviewMaxReviews,
+			wantJudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
+			wantStableRounds: ralphconfig.DefaultReviewStableRounds,
+		},
+		{
+			name: "max_reviews only",
+			reviewConvergence: `
+      max_reviews: 12
+`,
+			wantMinReviews:   ralphconfig.DefaultReviewMinReviews,
+			wantMaxReviews:   12,
+			wantJudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
+			wantStableRounds: ralphconfig.DefaultReviewStableRounds,
+		},
+		{
+			name: "judge_every only",
+			reviewConvergence: `
+      judge_every: 3
+`,
+			wantMinReviews:   ralphconfig.DefaultReviewMinReviews,
+			wantMaxReviews:   ralphconfig.DefaultReviewMaxReviews,
+			wantJudgeEvery:   3,
+			wantStableRounds: ralphconfig.DefaultReviewStableRounds,
+		},
+		{
+			name: "stable_rounds only",
+			reviewConvergence: `
+      stable_rounds: 4
+`,
+			wantMinReviews:   ralphconfig.DefaultReviewMinReviews,
+			wantMaxReviews:   ralphconfig.DefaultReviewMaxReviews,
+			wantJudgeEvery:   ralphconfig.DefaultReviewJudgeEvery,
+			wantStableRounds: 4,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(namePrefix+tc.name, func(t *testing.T) {
+			t.Parallel()
+			assertReviewConvergenceValues(
+				t,
+				tc.reviewConvergence,
+				tc.wantMinReviews,
+				tc.wantMaxReviews,
+				tc.wantJudgeEvery,
+				tc.wantStableRounds,
+			)
+		})
 	}
 }
 

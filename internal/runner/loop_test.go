@@ -590,6 +590,76 @@ func TestReviewConvergenceStableRounds(t *testing.T) {
 	}
 }
 
+func TestReviewStableCountResetsOnUnstableJudge(t *testing.T) {
+	t.Parallel()
+
+	root, tmpDir := setupWorkspace(
+		t,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+		"prompt-run\n",
+	)
+	const (
+		reviewPrompt = "REVIEW_ROLE_PROMPT"
+		judgePrompt  = "JUDGE_ROLE_PROMPT"
+	)
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.review.md"), reviewPrompt+"\n")
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.judge.md"), judgePrompt+"\n")
+
+	judgeCounterPath := filepath.Join(root, ".ralph", "judge-count.txt")
+	cfg := testConfig(
+		fmt.Sprintf(
+			"input=$(cat); "+
+				"if [ \"$input\" = %s ]; then "+
+				"count=0; "+
+				"if [ -f %s ]; then count=$(cat %s); fi; "+
+				"count=$((count+1)); "+
+				"printf '%%s' \"$count\" > %s; "+
+				"if [ \"$count\" -eq 1 ]; then "+
+				"printf '{\"signal\":\"READY\",\"new_findings\":0,\"new_finding_keys\":[]}\\n'; "+
+				"elif [ \"$count\" -eq 2 ]; then "+
+				"printf '{\"signal\":\"READY\",\"new_findings\":1,\"new_finding_keys\":[\"F1\"]}\\n'; "+
+				"else "+
+				"printf '{\"signal\":\"READY\",\"new_findings\":0,\"new_finding_keys\":[]}\\n'; "+
+				"fi; "+
+				"else printf 'review\\n'; fi",
+			shQuote(judgePrompt),
+			shQuote(judgeCounterPath),
+			shQuote(judgeCounterPath),
+			shQuote(judgeCounterPath),
+		),
+		nil,
+		nil,
+	)
+	cfg.Agent.MaxIterations = 6
+	cfg.Completion.Review.Signal = "READY"
+	cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{
+		MinReviews:   1,
+		MaxReviews:   3,
+		JudgeEvery:   1,
+		StableRounds: 2,
+	}
+
+	code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+		WorkingDir: root,
+		Stdout:     io.Discard,
+		Stderr:     io.Discard,
+		TempDir:    tmpDir,
+		Sleep:      func(time.Duration) {},
+		Mode:       ralphrunner.ModeReview,
+	})
+	if code != ralphrunner.ExitCodeMaxIterations {
+		t.Fatalf(
+			"expected non-convergence exit code %d after unstable reset, got %d",
+			ralphrunner.ExitCodeMaxIterations,
+			code,
+		)
+	}
+
+	if got := strings.TrimSpace(readFile(t, judgeCounterPath)); got != "3" {
+		t.Fatalf("expected three judge evaluations, got %q", got)
+	}
+}
+
 func TestReviewNonConvergenceReturns23(t *testing.T) {
 	t.Parallel()
 

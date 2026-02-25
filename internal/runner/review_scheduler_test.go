@@ -159,6 +159,88 @@ func TestReviewSchedulerMaxReviewsBoundary(t *testing.T) {
 	}
 }
 
+func TestReviewSchedulerRespectsMinReviewsBeforeJudge(t *testing.T) {
+	t.Parallel()
+
+	root, tmpDir := setupWorkspace(
+		t,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+		"prompt-run\n",
+	)
+
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.review.md"), reviewPromptMarker+"\n")
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.judge.md"), judgePromptMarker+"\n")
+
+	roleLog := filepath.Join(root, ".ralph", "role.log")
+	cfg := testConfig(
+		fmt.Sprintf(
+			"input=$(cat); printf '%%s\\n' \"$input\" >> %s; "+
+				"if [ \"$input\" = %s ]; then "+
+				"printf '{\"signal\":\"continue\",\"new_findings\":1,\"new_finding_keys\":[\"A\"]}\\n'; "+
+				"else printf 'iteration\\n'; fi",
+			shQuote(roleLog),
+			shQuote(judgePromptMarker),
+		),
+		nil,
+		nil,
+	)
+	cfg.Agent.MaxIterations = 5
+	cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{
+		MinReviews:   3,
+		MaxReviews:   5,
+		JudgeEvery:   1,
+		StableRounds: 2,
+	}
+
+	code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+		WorkingDir: root,
+		Stdout:     io.Discard,
+		Stderr:     io.Discard,
+		TempDir:    tmpDir,
+		Sleep:      func(time.Duration) {},
+		Mode:       ralphrunner.ModeReview,
+	})
+	if code != ralphrunner.ExitCodeMaxIterations {
+		t.Fatalf("expected exit code %d, got %d", ralphrunner.ExitCodeMaxIterations, code)
+	}
+
+	got := readLoggedRoles(t, roleLog)
+	firstJudgeIndex := slices.Index(got, judgePromptMarker)
+	if firstJudgeIndex != 3 {
+		t.Fatalf(
+			"expected first judge at index 3 after min_reviews, got index %d roles=%v",
+			firstJudgeIndex,
+			got,
+		)
+	}
+
+	wantPrefix := []string{
+		reviewPromptMarker,
+		reviewPromptMarker,
+		reviewPromptMarker,
+		judgePromptMarker,
+	}
+	if len(got) < len(wantPrefix) {
+		t.Fatalf(
+			"expected at least %d scheduled roles, got %d roles=%v",
+			len(wantPrefix),
+			len(got),
+			got,
+		)
+	}
+	for idx, wantRole := range wantPrefix {
+		if got[idx] != wantRole {
+			t.Fatalf(
+				"unexpected role at index %d: got=%q want=%q full=%v",
+				idx,
+				got[idx],
+				wantRole,
+				got,
+			)
+		}
+	}
+}
+
 func TestReviewRunIDFormatAndArtifactNaming(t *testing.T) {
 	t.Parallel()
 
