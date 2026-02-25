@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -14,6 +15,8 @@ var (
 	errJudgeNewFindingsRequired    = errors.New("judge contract new_findings is required")
 	errJudgeNewFindingKeysRequired = errors.New("judge contract new_finding_keys is required")
 	errJudgeNewFindingsNegative    = errors.New("judge contract new_findings must be >= 0")
+	errJudgeTrailingJSONValue      = errors.New("judge contract has unexpected trailing json value")
+	errJudgeTrailingContent        = errors.New("judge contract has unexpected trailing content")
 )
 
 type judgeContract struct {
@@ -41,6 +44,19 @@ func parseJudgeContract(path string) (judgeContract, error) {
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&payload); err != nil {
 		return judgeContract{}, fmt.Errorf("decode judge artifact json: %w", err)
+	}
+	var trailing json.RawMessage
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return judgeContract{}, fmt.Errorf(
+				"decode judge artifact json: %w",
+				errJudgeTrailingJSONValue,
+			)
+		}
+		return judgeContract{}, fmt.Errorf(
+			"decode judge artifact json: %w",
+			errors.Join(errJudgeTrailingContent, err),
+		)
 	}
 	if payload.Signal == nil || strings.TrimSpace(*payload.Signal) == "" {
 		return judgeContract{}, errJudgeSignalRequired

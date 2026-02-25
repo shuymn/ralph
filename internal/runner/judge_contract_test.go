@@ -86,6 +86,44 @@ func TestJudgeContractRejectsNegativeNewFindings(t *testing.T) {
 	}
 }
 
+func TestJudgeContractRejectsTrailingInput(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		judgeOutput string
+	}{
+		{
+			name: "multiple json payloads",
+			judgeOutput: `{"signal":"READY","new_findings":0,"new_finding_keys":[]}` +
+				"\n" +
+				`{"signal":"READY","new_findings":0,"new_finding_keys":[]}` +
+				"\n",
+		},
+		{
+			name:        "trailing noise token",
+			judgeOutput: `{"signal":"READY","new_findings":0,"new_finding_keys":[]}` + "\nnoise\n",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			code, stderr := runReviewWithJudgeOutput(t, tc.judgeOutput)
+			if code != ralphrunner.ExitCodeRuntime {
+				t.Fatalf("expected runtime exit code %d, got %d", ralphrunner.ExitCodeRuntime, code)
+			}
+			if !strings.Contains(stderr, "decode judge artifact json") {
+				t.Fatalf("expected decode error in stderr, got %q", stderr)
+			}
+			if !strings.Contains(stderr, "unexpected trailing") {
+				t.Fatalf("expected trailing-input error in stderr, got %q", stderr)
+			}
+		})
+	}
+}
+
 func runReviewWithJudgeOutput(t *testing.T, judgeOutput string) (int, string) {
 	t.Helper()
 
