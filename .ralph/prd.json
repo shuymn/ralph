@@ -1,0 +1,56 @@
+{
+  "project": "ralph",
+  "plan": "docs/plans/2026-02-23-ralph-runner-plan.md",
+  "branchName": "feat/ralph-runner-flow",
+  "stories": [
+    {
+      "id": "task-1",
+      "title": "Bootstrap `ralph init` scaffolding",
+      "deps": [],
+      "passes": false
+    },
+    {
+      "id": "task-2",
+      "title": "Add config and `prd.json` load-time validation",
+      "deps": [
+        "task-1"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-3",
+      "title": "Implement expression evaluator for step `if`",
+      "deps": [
+        "task-2"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-4",
+      "title": "Build the core run loop and completion checks",
+      "deps": [
+        "task-2",
+        "task-3"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-5",
+      "title": "Implement builtin `uses: auto_commit`",
+      "deps": [
+        "task-4"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-6",
+      "title": "Add `ralph run --dry-run` plan output",
+      "deps": [
+        "task-2",
+        "task-3",
+        "task-4"
+      ],
+      "passes": false
+    }
+  ]
+}
