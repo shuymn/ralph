@@ -38,8 +38,9 @@ type Completion struct {
 }
 
 type Git struct {
-	Commit          string `json:"commit,omitempty"           yaml:"commit"`
-	FallbackMessage string `json:"fallback_message,omitempty" yaml:"fallback_message"` //nolint:tagliatelle // External schema key uses snake_case.
+	Commit            string `json:"commit,omitempty"               yaml:"commit"`
+	FallbackMessage   string `json:"fallback_message,omitempty"     yaml:"fallback_message"`     //nolint:tagliatelle // External schema key uses snake_case.
+	FallbackNoGPGSign bool   `json:"fallback_no_gpg_sign,omitempty" yaml:"fallback_no_gpg_sign"` //nolint:tagliatelle // External schema key uses snake_case.
 }
 
 type Phases struct {

@@ -47,6 +47,9 @@
         },
         "fallback_message": {
           "type": "string"
+        },
+        "fallback_no_gpg_sign": {
+          "type": "boolean"
         }
       },
       "type": "object"
