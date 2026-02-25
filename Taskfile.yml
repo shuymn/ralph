@@ -85,6 +85,8 @@ tasks:
   check:
     desc: Run all checks (test, lint, build)
     cmds:
+      - cmd: go mod tidy
+        silent: true
       - task: lint
       - task: build
       - task: test
