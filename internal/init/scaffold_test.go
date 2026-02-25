@@ -15,7 +15,7 @@ import (
 const configSchemaLine = "# yaml-language-server: $schema=" +
 	"https://raw.githubusercontent.com/shuymn/ralph/main/schemas/config.schema.json"
 
-func TestScaffoldCreatesTemplateFiles(t *testing.T) {
+func TestScaffoldCreatesReviewPromptSet(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -28,7 +28,9 @@ func TestScaffoldCreatesTemplateFiles(t *testing.T) {
 
 	expected := []string{
 		filepath.Join(root, ".ralph", "config.yml"),
-		filepath.Join(root, ".ralph", "prompt.md"),
+		filepath.Join(root, ".ralph", "prompt.run.md"),
+		filepath.Join(root, ".ralph", "prompt.review.md"),
+		filepath.Join(root, ".ralph", "prompt.judge.md"),
 		filepath.Join(root, ".ralph", "prd.json"),
 		filepath.Join(root, ".ralph", "progress.md"),
 	}
@@ -75,6 +77,68 @@ func TestScaffoldCreatesTemplateFiles(t *testing.T) {
 			"scaffold must not create %q (schema artifact must stay at repository-level)",
 			schemaCopyPath,
 		)
+	}
+}
+
+func TestScaffoldOmitsLegacyPromptAndReviewsDir(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	var stderr bytes.Buffer
+	fixed := time.Date(2026, time.February, 23, 10, 0, 0, 0, time.UTC)
+
+	if err := ralphinit.Scaffold(root, fixed, &stderr); err != nil {
+		t.Fatalf("Scaffold returned error: %v", err)
+	}
+
+	legacyPrompt := filepath.Join(root, ".ralph", "prompt.md")
+	if _, err := os.Stat(legacyPrompt); !os.IsNotExist(err) {
+		t.Fatalf("legacy prompt must not be created: %s", legacyPrompt)
+	}
+
+	reviewsDir := filepath.Join(root, ".ralph", "reviews")
+	if _, err := os.Stat(reviewsDir); !os.IsNotExist(err) {
+		t.Fatalf("reviews directory must not be created: %s", reviewsDir)
+	}
+}
+
+func TestScaffoldConfigIncludesRunAndReviewProfiles(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	var stderr bytes.Buffer
+	fixed := time.Date(2026, time.February, 23, 10, 0, 0, 0, time.UTC)
+
+	if err := ralphinit.Scaffold(root, fixed, &stderr); err != nil {
+		t.Fatalf("Scaffold returned error: %v", err)
+	}
+
+	configPath := filepath.Join(root, ".ralph", "config.yml")
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed reading config.yml: %v", err)
+	}
+	text := string(content)
+
+	required := []string{
+		"run_command:",
+		"completion:",
+		"run:",
+		"strategy: tail_match",
+		"review:",
+		"strategy: review_convergence",
+		"review_convergence:",
+	}
+	for _, snippet := range required {
+		if !strings.Contains(text, snippet) {
+			t.Fatalf("config.yml missing %q, got:\n%s", snippet, text)
+		}
+	}
+
+	for _, forbidden := range []string{"review_command:", "judge_command:", "\n  command:"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("config.yml must not include %q, got:\n%s", forbidden, text)
+		}
 	}
 }
 
@@ -130,7 +194,7 @@ func TestScaffoldSkipsExistingFilesAndReportsToStderr(t *testing.T) {
 		t.Fatalf("stderr missing skipped progress path, got: %s", stderrOutput)
 	}
 
-	for _, created := range []string{"prompt.md", "prd.json"} {
+	for _, created := range []string{"prompt.run.md", "prompt.review.md", "prompt.judge.md", "prd.json"} {
 		if _, err := os.Stat(filepath.Join(ralphDir, created)); err != nil {
 			t.Fatalf("expected %s to be created: %v", created, err)
 		}

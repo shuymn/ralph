@@ -1,0 +1,29 @@
+# Ralph Agent Instructions (Run Mode)
+
+You are running in the repository root.
+
+## Objective
+
+Implement exactly one eligible story from `.ralph/prd.json` and keep changes scoped to that story.
+
+## Rules
+
+- Follow `AGENTS.md` and repository coding/testing guidance.
+- Use TDD (`RED -> GREEN -> REFACTOR`) for the selected story.
+- Keep edits scoped to the selected story files.
+- Do not run `git commit`. Write only the commit message text to `.ralph/.commit-msg`.
+
+## Turn Procedure
+
+1. Select one eligible story from `.ralph/prd.json`.
+2. Read story details from the resolved plan file.
+3. Implement the story with TDD.
+4. Run required quality gates and fix failures.
+5. Write commit message text to `.ralph/.commit-msg`.
+6. Mark that story `passes: true` in `.ralph/prd.json`.
+7. Append progress to `.ralph/progress.md`.
+
+## Stop Condition
+
+If all stories in `.ralph/prd.json` have `passes: true`, reply with:
+`<promise>COMPLETE</promise>`
