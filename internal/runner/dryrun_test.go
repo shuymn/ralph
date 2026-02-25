@@ -185,6 +185,7 @@ func TestDryRunReviewProfileOutput(t *testing.T) {
 		"agent.judge_command.source: judge_command",
 		"prompt.review_path: " + filepath.Join(root, ".ralph", "prompt.review.md"),
 		"prompt.judge_path: " + filepath.Join(root, ".ralph", "prompt.judge.md"),
+		"phases: disabled in review mode",
 		"completion.review.strategy: review_convergence",
 		"completion.review.signal: <done>REVIEW</done>",
 		"completion.review.review_convergence.min_reviews: 4",
@@ -197,6 +198,15 @@ func TestDryRunReviewProfileOutput(t *testing.T) {
 	for _, snippet := range expectedSnippets {
 		if !strings.Contains(out, snippet) {
 			t.Fatalf("dry-run output missing %q\nfull output:\n%s", snippet, out)
+		}
+	}
+	for _, forbidden := range []string{"phases.pre:", "phases.post:", "git.commit:"} {
+		if strings.Contains(out, forbidden) {
+			t.Fatalf(
+				"dry-run output must not include %q in review mode\nfull output:\n%s",
+				forbidden,
+				out,
+			)
 		}
 	}
 	if stderr.Len() != 0 {

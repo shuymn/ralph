@@ -11,7 +11,8 @@
 - `.ralph/prd.json` の `branchName` を必須とし、`run` 開始時に対象ブランチへ `git switch`（未存在なら作成）
 - `run` mode では `agent.run_command` を `sh -c` で実行し、`.ralph/prompt.run.md` を stdin で渡す
 - `review` mode では `review`/`judge` role を自動スケジュールし、`.ralph/prompt.review.md` と `.ralph/prompt.judge.md` を使う
-- `post` phase で `uses: auto_commit` を使った自動コミットが可能
+- `phases.pre` / `phases.post` は `run` mode のみ適用される（`review` mode では無視される）
+- `post` phase（`run` modeのみ）で `uses: auto_commit` を使った自動コミットが可能
 - 完了条件:
   - `run`: `completion.run.signal` を `completion.run.tail_lines` で tail-match 判定
   - `review`: `completion.review.review_convergence` と judge JSON 契約で収斂判定

@@ -110,7 +110,7 @@ func renderReviewDryRunPlan(
 	_, _ = fmt.Fprintf(stdout, "agent.sleep_seconds: %d\n", plan.Agent.SleepSeconds)
 	_, _ = fmt.Fprintf(stdout, "prompt.review_path: %s\n", reviewModePlan.PromptPath)
 	_, _ = fmt.Fprintf(stdout, "prompt.judge_path: %s\n", judgeModePlan.PromptPath)
-	renderDryRunPlanCommon(stdout, plan)
+	_, _ = fmt.Fprintln(stdout, "phases: disabled in review mode")
 	_, _ = fmt.Fprintf(stdout, "completion.review.strategy: %s\n", profile.Strategy)
 	_, _ = fmt.Fprintf(stdout, "completion.review.signal: %s\n", profile.Signal)
 	_, _ = fmt.Fprintf(

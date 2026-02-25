@@ -75,7 +75,7 @@ CLI は `ralph run` と `ralph review` の 2 サブコマンドを提供する�
 ### 1.1 Command Surface
 
 - `ralph run`: 既存の通常ループ実行（main は `agent.run_command`、completion は既存設定を使用）
-- `ralph review`: 収斂レビュー実行（`review`/`judge` をスケジュールし、completion は `review_convergence` を使用）
+- `ralph review`: 収斂レビュー実行（`review`/`judge` をスケジュールし、completion は `review_convergence` を使用。`phases.pre` / `phases.post` は実行しない）
 
 `ralph run` は `completion.run` を参照し、`ralph review` は `completion.review` を参照する。  
 対応 profile が未定義、または strategy が不正な場合は設定エラー（exit `22`）で終了する。
@@ -230,6 +230,7 @@ judge role 実行結果（`JUDGE_n.json`）を parse して、次を満たすと
 - role command の解決結果（review/judge, override/fallback 含む）
 - `min_reviews`, `max_reviews`, `judge_every`, `stable_rounds`
 - `prompt.review.md` / `prompt.judge.md` path
+- phase は review mode で無効化されること
 - judge JSON 契約（必須キーと判定条件）
 
 validation 失敗時は既存同様 exit `22`。
@@ -303,3 +304,4 @@ validation 失敗時は既存同様 exit `22`。
 17. `ralph init` は `.ralph/prompt.md` と `.ralph/reviews/` を生成しない。
 18. `ralph init` が生成する `config.yml` は `agent.run_command` と `completion.run` / `completion.review` を含み、`review_command` / `judge_command` は省略する。
 19. `ralph run` 実行時に `.ralph/prompt.run.md` が欠落または空の場合は exit `22` で失敗する。
+20. `ralph review` 実行時は `phases.pre` / `phases.post` を実行しない（phase は run 専用）。

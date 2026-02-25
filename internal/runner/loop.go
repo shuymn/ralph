@@ -172,23 +172,26 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 		autoCommitOpts := autoCommitBase
 		autoCommitOpts.BeforePRD = beforePRD
 
+		phasesEnabled := iterationPlan.Mode == ModeRun
 		changedFunc := ralphcondition.NewGitChangedFunc(opts.WorkingDir)
 
-		preResult, err := runPhase(
-			ctx,
-			plan.PreSteps,
-			&phaseState{success: true, failure: false},
-			changedFunc,
-			autoCommitOpts,
-			opts,
-		)
-		if err != nil {
-			logRuntimeError(opts.Stderr, err)
-			return ExitCodeRuntime
-		}
-		if preResult.stopLoop {
-			logStopLoop(opts.Stderr, "pre", preResult.stepName, preResult.reason)
-			return ExitCodeStopLoop
+		if phasesEnabled {
+			preResult, err := runPhase(
+				ctx,
+				plan.PreSteps,
+				&phaseState{success: true, failure: false},
+				changedFunc,
+				autoCommitOpts,
+				opts,
+			)
+			if err != nil {
+				logRuntimeError(opts.Stderr, err)
+				return ExitCodeRuntime
+			}
+			if preResult.stopLoop {
+				logStopLoop(opts.Stderr, "pre", preResult.stepName, preResult.reason)
+				return ExitCodeStopLoop
+			}
 		}
 
 		mainResult, err := runMainStep(ctx, mainStepPlan{
@@ -224,23 +227,25 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			reviewRuntimeState.state.recordRole(iterationPlan.Role)
 		}
 
-		postResult, err := runPhase(
-			ctx,
-			plan.PostSteps,
-			&phaseState{success: mainResult.Success, failure: !mainResult.Success},
-			changedFunc,
-			autoCommitOpts,
-			opts,
-		)
-		if err != nil {
-			tracker.cleanup(mainResult.OutputPath)
-			logRuntimeError(opts.Stderr, err)
-			return ExitCodeRuntime
-		}
-		if postResult.stopLoop {
-			tracker.cleanup(mainResult.OutputPath)
-			logStopLoop(opts.Stderr, "post", postResult.stepName, postResult.reason)
-			return ExitCodeStopLoop
+		if phasesEnabled {
+			postResult, err := runPhase(
+				ctx,
+				plan.PostSteps,
+				&phaseState{success: mainResult.Success, failure: !mainResult.Success},
+				changedFunc,
+				autoCommitOpts,
+				opts,
+			)
+			if err != nil {
+				tracker.cleanup(mainResult.OutputPath)
+				logRuntimeError(opts.Stderr, err)
+				return ExitCodeRuntime
+			}
+			if postResult.stopLoop {
+				tracker.cleanup(mainResult.OutputPath)
+				logStopLoop(opts.Stderr, "post", postResult.stepName, postResult.reason)
+				return ExitCodeStopLoop
+			}
 		}
 
 		completionCode, err := completeModeIteration(

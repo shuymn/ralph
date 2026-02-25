@@ -553,6 +553,66 @@ func TestReviewLogsRemainFreeForm(t *testing.T) {
 	}
 }
 
+func TestReviewSkipsPreAndPostPhases(t *testing.T) {
+	t.Parallel()
+
+	root, tmpDir := setupWorkspace(
+		t,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+		"prompt-run\n",
+	)
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.review.md"), "review output\n")
+	writeFile(
+		t,
+		filepath.Join(root, ".ralph", "prompt.judge.md"),
+		`{"signal":"READY","new_findings":0,"new_finding_keys":[]}`+"\n",
+	)
+
+	preMarker := filepath.Join(root, "pre.marker")
+	postMarker := filepath.Join(root, "post.marker")
+	cfg := testConfig(
+		"cat",
+		[]ralphconfig.Step{{
+			Name:   "pre_should_not_run",
+			Run:    "printf 'pre' > " + shQuote(preMarker),
+			If:     "always()",
+			OnFail: "stop_loop",
+		}},
+		[]ralphconfig.Step{{
+			Name:   "post_should_not_run",
+			Run:    "printf 'post' > " + shQuote(postMarker),
+			If:     "always()",
+			OnFail: "stop_loop",
+		}},
+	)
+	cfg.Agent.MaxIterations = 4
+	cfg.Completion.Review.Signal = "READY"
+	cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{
+		MinReviews:   1,
+		MaxReviews:   2,
+		JudgeEvery:   1,
+		StableRounds: 1,
+	}
+
+	code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+		WorkingDir: root,
+		Stdout:     io.Discard,
+		Stderr:     io.Discard,
+		TempDir:    tmpDir,
+		Sleep:      func(time.Duration) {},
+		Mode:       ralphrunner.ModeReview,
+	})
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if _, err := os.Stat(preMarker); !os.IsNotExist(err) {
+		t.Fatalf("expected pre marker to not exist, got err=%v", err)
+	}
+	if _, err := os.Stat(postMarker); !os.IsNotExist(err) {
+		t.Fatalf("expected post marker to not exist, got err=%v", err)
+	}
+}
+
 func TestRunSwitchesToBranchFromPRD(t *testing.T) {
 	t.Parallel()
 
