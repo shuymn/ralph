@@ -91,6 +91,7 @@ agent:
 git:
   commit: split
   fallback_message: "feat: implement task (auto-commit)"
+  fallback_no_gpg_sign: true
 
 phases:
   pre:
@@ -112,6 +113,7 @@ Default values (when omitted):
 - `completion.tail_lines`: `20`
 - `git.commit`: `split`
 - `git.fallback_message`: `feat: implement task (auto-commit)`
+- `git.fallback_no_gpg_sign`: `false`
 - `step.if`: `success()`
 - `step.on_fail`: `stop_loop`
 
@@ -142,6 +144,8 @@ Commit message resolution:
 
 - Use `.ralph/.commit-msg` if it exists and is not blank.
 - Otherwise use `git.fallback_message`.
+- If `git.fallback_no_gpg_sign` is `true` and commit fails due to GPG signing,
+  retry once with `git commit --no-gpg-sign`.
 
 ## Exit codes
 

@@ -90,6 +90,7 @@ agent:
 git:
   commit: split
   fallback_message: "feat: implement task (auto-commit)"
+  fallback_no_gpg_sign: true
 
 phases:
   pre:
@@ -111,6 +112,7 @@ phases:
 - `completion.tail_lines`: `20`
 - `git.commit`: `split`
 - `git.fallback_message`: `feat: implement task (auto-commit)`
+- `git.fallback_no_gpg_sign`: `false`
 - `step.if`: `success()`
 - `step.on_fail`: `stop_loop`
 
@@ -141,6 +143,8 @@ step の制約:
 
 - `.ralph/.commit-msg` が存在し、内容が空白のみでない場合はそれを使用
 - それ以外は `git.fallback_message` を使用
+- `git.fallback_no_gpg_sign` が `true` の場合、GPG 署名エラーで commit が失敗したときに
+  `git commit --no-gpg-sign` で 1 回だけ再試行
 
 ## 終了コード
 
