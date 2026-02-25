@@ -6,6 +6,7 @@
 ## 主な動作
 
 - `.ralph/config.yml` を読み込んで runner を構成
+- `.ralph/prd.json` の `branchName` を必須とし、`run` 開始時に対象ブランチへ `git switch`（未存在なら作成）
 - `main` phase では `agent.command` を `sh -c` で実行し、`.ralph/prompt.md` を stdin で渡す
 - `post` phase で `uses: auto_commit` を使った自動コミットが可能
 - 完了条件:
@@ -35,8 +36,7 @@ task build
 
 ## 最短実行手順
 
-1. `.ralph/prd.json` を更新して、最低 1 件の story を入れる  
-   （初期テンプレートの `stories: []` のままだと `run` / `--dry-run` は失敗します）
+1. `.ralph/prd.json` を更新する（`branchName` と story 内容を実プロジェクト向けに置換）
 2. `.ralph/config.yml` の `agent.command` を実環境のコマンドに合わせる
 3. dry-run で実行計画を確認する
 
@@ -56,6 +56,7 @@ task build
 {
   "project": "your-project",
   "plan": "docs/plans/2026-01-01-your-plan.md",
+  "branchName": "feature/task-001",
   "stories": [
     {
       "id": "TASK-001",
