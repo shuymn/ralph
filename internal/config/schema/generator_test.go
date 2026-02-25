@@ -158,6 +158,10 @@ func TestSchemaConstraints(t *testing.T) {
 		mustMapAtPath(t, git, "properties", "commit"),
 		[]string{ralphconfig.DefaultGitCommitMode, gitCommitTogetherValue},
 	)
+	fallbackNoGPGSign := mustMapAtPath(t, git, "properties", "fallback_no_gpg_sign")
+	if gotType, ok := fallbackNoGPGSign["type"].(string); !ok || gotType != "boolean" {
+		t.Fatalf("git.fallback_no_gpg_sign.type = %v, want boolean", fallbackNoGPGSign["type"])
+	}
 
 	phases := mustMapAtPath(t, doc, "properties", "phases")
 	assertAdditionalPropertiesFalse(t, "phases", phases)

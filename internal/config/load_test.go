@@ -144,6 +144,72 @@ phases:
 	assertErrorCode(t, err, ralphconfig.ErrCodeConfigGitCommit)
 }
 
+func TestLoadBytesAppliesFallbackNoGPGSign(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name      string
+		gitBlock  string
+		wantValue bool
+	}{
+		{
+			name: "default false when omitted",
+			gitBlock: `
+git:
+  commit: split
+`,
+			wantValue: false,
+		},
+		{
+			name: "explicit true",
+			gitBlock: `
+git:
+  commit: split
+  fallback_no_gpg_sign: true
+`,
+			wantValue: true,
+		},
+		{
+			name: "explicit false",
+			gitBlock: `
+git:
+  commit: split
+  fallback_no_gpg_sign: false
+`,
+			wantValue: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			content := `
+version: "1"
+agent:
+  command: "echo hello"
+` + tc.gitBlock + `
+phases:
+  pre:
+    steps: []
+  post:
+    steps: []
+`
+			cfg, err := ralphconfig.LoadBytes([]byte(content))
+			if err != nil {
+				t.Fatalf("LoadBytes returned error: %v", err)
+			}
+			if cfg.Git.FallbackNoGPGSign != tc.wantValue {
+				t.Fatalf(
+					"git.fallback_no_gpg_sign=%t, want %t",
+					cfg.Git.FallbackNoGPGSign,
+					tc.wantValue,
+				)
+			}
+		})
+	}
+}
+
 func TestLoadBytesRejectsUnsupportedIfExpression(t *testing.T) {
 	t.Parallel()
 
