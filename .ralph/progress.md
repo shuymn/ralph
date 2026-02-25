@@ -98,3 +98,21 @@ Started: 2026-02-25
   - Gotchas encountered
     - Repository-local Go module caches contain read-only files from toolchain downloads; cleanup requires `chmod -R u+w` before deletion in sandboxed runs.
 ---
+## [2026-02-25] - [task-6]: Extend dry-run output for run/review profiles
+- What was implemented
+  - Reworked `internal/runner/DryRun` to be mode-aware and render separate run/review execution plans.
+  - Added run dry-run output for `mode`, `agent.run_command`, `prompt.run_path`, and `completion.run` profile fields while preserving pre/post step and git plan visibility.
+  - Added review dry-run output for resolved review/judge commands (with override vs fallback source), review/judge prompt paths, `review_convergence` parameters, and judge JSON contract lines.
+  - Wired command mode propagation into dry-run/runtime entrypoints so `review` invokes runner in `ModeReview` and `run` in `ModeRun` (`cmd/ralph/run.go`, `main.go`).
+  - Replaced dry-run tests with task-specific coverage: `TestDryRunRunProfileOutput` and `TestDryRunReviewProfileOutput`.
+- DoD verification results
+  - `go test ./internal/runner -run 'TestDryRunRunProfileOutput|TestDryRunReviewProfileOutput'`: PASS
+  - `task fmt`: PASS
+  - `task lint`: PASS
+  - `task test`: PASS
+- Learnings:
+  - Patterns discovered
+    - Sharing `resolveModePlan` between runtime execution and dry-run keeps command/prompt validation and fallback behavior consistent across modes.
+  - Gotchas encountered
+    - Review dry-run must resolve both `review` and `judge` role plans to expose full command/prompt contracts, not only the next scheduled role.
+---
