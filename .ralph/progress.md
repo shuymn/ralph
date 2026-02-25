@@ -116,3 +116,21 @@ Started: 2026-02-25
   - Gotchas encountered
     - Review dry-run must resolve both `review` and `judge` role plans to expose full command/prompt contracts, not only the next scheduled role.
 ---
+## [2026-02-25] - [task-7]: Update `ralph init` scaffolding for review convergence defaults
+- What was implemented
+  - Updated `internal/init/scaffold.go` to scaffold `.ralph/prompt.run.md`, `.ralph/prompt.review.md`, and `.ralph/prompt.judge.md` instead of legacy `.ralph/prompt.md`.
+  - Updated `internal/init/templates/config.tmpl` to emit `agent.run_command` plus `completion.run`/`completion.review` (`review_convergence`) defaults while omitting `review_command` and `judge_command`.
+  - Added new init prompt templates (`prompt.run.tmpl`, `prompt.review.tmpl`, `prompt.judge.tmpl`) and removed the legacy `prompt.tmpl`.
+  - Reworked `internal/init/scaffold_test.go` with task-specific coverage: `TestScaffoldCreatesReviewPromptSet`, `TestScaffoldOmitsLegacyPromptAndReviewsDir`, and `TestScaffoldConfigIncludesRunAndReviewProfiles`.
+  - Updated `README.md` and `README.ja.md` init output lists and config examples to match the new run/review scaffolding contract.
+- DoD verification results
+  - `go test ./internal/init -run 'TestScaffoldCreatesReviewPromptSet|TestScaffoldOmitsLegacyPromptAndReviewsDir|TestScaffoldConfigIncludesRunAndReviewProfiles'`: PASS
+  - `task fmt`: PASS
+  - `task lint`: PASS
+  - `task test`: PASS
+- Learnings:
+  - Patterns discovered
+    - Template-driven scaffold migrations are safer when tests assert both positive outputs (new files) and negative outputs (legacy files/dirs must not be generated).
+  - Gotchas encountered
+    - Sandbox blocks default Go build cache paths; using repository-local `GOCACHE`/`GOMODCACHE`/`GOPATH` avoids false-negative test failures.
+---
