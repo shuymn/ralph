@@ -7,7 +7,7 @@
       "id": "task-1",
       "title": "Refactor config model to command profiles",
       "deps": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "task-2",
