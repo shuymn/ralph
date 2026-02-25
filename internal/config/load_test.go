@@ -478,6 +478,31 @@ completion:
 	}
 }
 
+func TestLoadBytesAppliesDefaultTailLinesWhenOmitted(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := ralphconfig.LoadBytes([]byte(`
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  run:
+    strategy: tail_match
+  review:
+    strategy: review_convergence
+`))
+	if err != nil {
+		t.Fatalf("LoadBytes returned error: %v", err)
+	}
+	if cfg.Completion.Run.TailLines != ralphconfig.DefaultRunCompletionTailLines {
+		t.Fatalf(
+			"completion.run.tail_lines=%d, want %d",
+			cfg.Completion.Run.TailLines,
+			ralphconfig.DefaultRunCompletionTailLines,
+		)
+	}
+}
+
 func TestLoadBytesAppliesReviewConvergencePartialDefaults(t *testing.T) {
 	t.Parallel()
 	runReviewConvergenceSingleFieldOverrideCases(t, "")
