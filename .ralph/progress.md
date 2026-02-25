@@ -3,6 +3,7 @@ Started: 2026-02-25
 
 ## Codebase Patterns
 - When YAML value fields must distinguish "omitted" from explicit zero, capture explicitness during unmarshalling and gate defaults on that flag so fail-fast validation can reject explicit invalid zeros.
+- For prompt precondition regressions, assert both the empty-file marker text and the concrete prompt path substring to keep mode-to-prompt wiring fail-fast.
 
 ## Progress Entries
 
@@ -96,4 +97,21 @@ Started: 2026-02-25
     - Fail-closed config semantics for scalar numerics can be preserved by combining explicit-value tracking at unmarshal time with default application only for omitted fields.
   - Gotchas encountered
     - The sandbox blocks writes to `.git/index`, so schema drift checks requiring `git diff --exit-code` needed an isolated temporary Git index/object directory to validate command semantics without touching repository metadata.
+---
+## [2026-02-25] - [task-6]: Add Prompt Empty-File Regression Coverage
+- What was implemented
+  - Added `TestRunRequiresNonEmptyPromptRun` with table-driven empty and whitespace-only `.ralph/prompt.run.md` cases.
+  - Added `TestReviewRequiresNonEmptyPromptFiles` with table-driven empty `.ralph/prompt.review.md` and `.ralph/prompt.judge.md` cases.
+  - Asserted runtime exit plus both empty-file marker text and target prompt-path substrings, keeping checks aligned to existing `requirePrompt` behavior.
+- DoD verification results
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build go test ./internal/runner -run 'TestRunRequiresNonEmptyPromptRun|TestReviewRequiresNonEmptyPromptFiles'`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task fmt`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task lint`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task test`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task build`
+- Learnings:
+  - Patterns discovered
+    - Empty prompt regression tables should include both zero-length and whitespace-only content to protect `strings.TrimSpace`-based guards.
+  - Gotchas encountered
+    - This story was test-coverage-only: the runtime contract already rejected empty files, so GREEN was achieved by adding missing regression assertions rather than behavior changes.
 ---

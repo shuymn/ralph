@@ -47,7 +47,7 @@
       "deps": [
         "task-1"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "task-7",
