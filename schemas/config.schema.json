@@ -5,32 +5,84 @@
     "agent": {
       "additionalProperties": false,
       "properties": {
-        "command": {
+        "judge_command": {
           "type": "string"
         },
         "max_iterations": {
           "type": "integer"
+        },
+        "review_command": {
+          "type": "string"
+        },
+        "run_command": {
+          "type": "string"
         },
         "sleep_seconds": {
           "type": "integer"
         }
       },
       "required": [
-        "command"
+        "run_command"
       ],
       "type": "object"
     },
     "completion": {
       "additionalProperties": false,
       "properties": {
-        "signal": {
-          "type": "string"
+        "review": {
+          "additionalProperties": false,
+          "properties": {
+            "review_convergence": {
+              "additionalProperties": false,
+              "properties": {
+                "judge_every": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "max_reviews": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "min_reviews": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "stable_rounds": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            },
+            "signal": {
+              "type": "string"
+            },
+            "strategy": {
+              "enum": [
+                "review_convergence"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
         },
-        "strategy": {
-          "type": "string"
-        },
-        "tail_lines": {
-          "type": "integer"
+        "run": {
+          "additionalProperties": false,
+          "properties": {
+            "signal": {
+              "type": "string"
+            },
+            "strategy": {
+              "enum": [
+                "tail_match"
+              ],
+              "type": "string"
+            },
+            "tail_lines": {
+              "type": "integer"
+            }
+          },
+          "type": "object"
         }
       },
       "type": "object"

@@ -13,8 +13,10 @@ import (
 
 const (
 	gitCommitTogetherValue = "together"
+	reviewConvergence      = "review_convergence"
 	stepOnFailContinue     = "continue"
 	stepUsesAutoCommit     = "auto_commit"
+	tailMatch              = "tail_match"
 )
 
 func TestGenerateIncludesHeaderAndTopLevelKeys(t *testing.T) {
@@ -40,7 +42,7 @@ func TestGenerateIncludesHeaderAndTopLevelKeys(t *testing.T) {
 		t.Fatalf("properties must not be empty")
 	}
 
-	for _, key := range []string{"version", "agent", "git", "phases"} {
+	for _, key := range []string{"version", "agent", "completion", "git", "phases"} {
 		if _, ok := props[key]; !ok {
 			t.Fatalf("missing top-level property %q", key)
 		}
@@ -162,6 +164,51 @@ func TestSchemaConstraints(t *testing.T) {
 	if gotType, ok := fallbackNoGPGSign["type"].(string); !ok || gotType != "boolean" {
 		t.Fatalf("git.fallback_no_gpg_sign.type = %v, want boolean", fallbackNoGPGSign["type"])
 	}
+
+	agent := mustMapAtPath(t, doc, "properties", "agent")
+	assertAdditionalPropertiesFalse(t, "agent", agent)
+	runCommand := mustMapAtPath(t, agent, "properties", "run_command")
+	if gotType, ok := runCommand["type"].(string); !ok || gotType != "string" {
+		t.Fatalf("agent.run_command.type = %v, want string", runCommand["type"])
+	}
+	if _, hasLegacy := mustMapAtPath(t, agent, "properties")["command"]; hasLegacy {
+		t.Fatalf("agent.command must not be present in schema")
+	}
+
+	completion := mustMapAtPath(t, doc, "properties", "completion")
+	assertAdditionalPropertiesFalse(t, "completion", completion)
+	if _, hasLegacy := mustMapAtPath(t, completion, "properties")["strategy"]; hasLegacy {
+		t.Fatalf("completion.strategy must not be present in schema")
+	}
+	runProfile := mustMapAtPath(t, completion, "properties", "run")
+	assertAdditionalPropertiesFalse(t, "completion.run", runProfile)
+	assertEnumValues(
+		t,
+		mustMapAtPath(t, runProfile, "properties", "strategy"),
+		[]string{tailMatch},
+	)
+	reviewProfile := mustMapAtPath(t, completion, "properties", "review")
+	assertAdditionalPropertiesFalse(t, "completion.review", reviewProfile)
+	assertEnumValues(
+		t,
+		mustMapAtPath(t, reviewProfile, "properties", "strategy"),
+		[]string{reviewConvergence},
+	)
+	reviewConvergenceSchema := mustMapAtPath(
+		t,
+		reviewProfile,
+		"properties",
+		"review_convergence",
+	)
+	assertAdditionalPropertiesFalse(
+		t,
+		"completion.review.review_convergence",
+		reviewConvergenceSchema,
+	)
+	assertIntegerMinOne(t, reviewConvergenceSchema, "min_reviews")
+	assertIntegerMinOne(t, reviewConvergenceSchema, "max_reviews")
+	assertIntegerMinOne(t, reviewConvergenceSchema, "judge_every")
+	assertIntegerMinOne(t, reviewConvergenceSchema, "stable_rounds")
 
 	phases := mustMapAtPath(t, doc, "properties", "phases")
 	assertAdditionalPropertiesFalse(t, "phases", phases)
@@ -300,6 +347,18 @@ func assertStepRunUsesXOR(t *testing.T, stepSchema map[string]any) {
 
 	if !hasRunRequired || !hasUsesRequired {
 		t.Fatalf("step oneOf must contain required branches for run and uses")
+	}
+}
+
+func assertIntegerMinOne(t *testing.T, parent map[string]any, key string) {
+	t.Helper()
+
+	property := mustMapAtPath(t, parent, "properties", key)
+	if gotType, ok := property["type"].(string); !ok || gotType != "integer" {
+		t.Fatalf("%s.type = %v, want integer", key, property["type"])
+	}
+	if gotMin, ok := property["minimum"].(float64); !ok || gotMin != 1 {
+		t.Fatalf("%s.minimum = %v, want 1", key, property["minimum"])
 	}
 }
 

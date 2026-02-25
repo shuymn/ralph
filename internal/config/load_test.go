@@ -2,6 +2,7 @@ package ralphconfig_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	ralphconfig "github.com/shuymn/ralph/internal/config"
@@ -13,7 +14,7 @@ func TestLoadBytesAppliesStepDefaults(t *testing.T) {
 	cfg, err := ralphconfig.LoadBytes([]byte(`
 version: "1"
 agent:
-  command: "echo hello"
+  run_command: "echo hello"
 git:
   commit: split
 phases:
@@ -51,7 +52,7 @@ func TestLoadBytesRejectsInvalidStepShape(t *testing.T) {
 	_, err := ralphconfig.LoadBytes([]byte(`
 version: "1"
 agent:
-  command: "echo hello"
+  run_command: "echo hello"
 git:
   commit: split
 phases:
@@ -72,7 +73,7 @@ func TestLoadBytesRejectsMissingStepName(t *testing.T) {
 	_, err := ralphconfig.LoadBytes([]byte(`
 version: "1"
 agent:
-  command: "echo hello"
+  run_command: "echo hello"
 git:
   commit: split
 phases:
@@ -91,7 +92,7 @@ func TestLoadBytesRejectsUnsupportedBuiltin(t *testing.T) {
 	_, err := ralphconfig.LoadBytes([]byte(`
 version: "1"
 agent:
-  command: "echo hello"
+  run_command: "echo hello"
 git:
   commit: split
 phases:
@@ -111,7 +112,7 @@ func TestLoadBytesRejectsInvalidOnFail(t *testing.T) {
 	_, err := ralphconfig.LoadBytes([]byte(`
 version: "1"
 agent:
-  command: "echo hello"
+  run_command: "echo hello"
 git:
   commit: split
 phases:
@@ -132,7 +133,7 @@ func TestLoadBytesRejectsInvalidCommitMode(t *testing.T) {
 	_, err := ralphconfig.LoadBytes([]byte(`
 version: "1"
 agent:
-  command: "echo hello"
+  run_command: "echo hello"
 git:
   commit: grouped
 phases:
@@ -187,7 +188,7 @@ git:
 			content := `
 version: "1"
 agent:
-  command: "echo hello"
+  run_command: "echo hello"
 ` + tc.gitBlock + `
 phases:
   pre:
@@ -216,7 +217,7 @@ func TestLoadBytesRejectsUnsupportedIfExpression(t *testing.T) {
 	_, err := ralphconfig.LoadBytes([]byte(`
 version: "1"
 agent:
-  command: "echo hello"
+  run_command: "echo hello"
 git:
   commit: split
 phases:
@@ -237,7 +238,7 @@ func TestLoadBytesRejectsUnknownTopLevelField(t *testing.T) {
 	_, err := ralphconfig.LoadBytes([]byte(`
 version: "1"
 agent:
-  command: "echo hello"
+  run_command: "echo hello"
 git:
   commit: split
 phases:
@@ -256,7 +257,7 @@ func TestLoadBytesRejectsUnknownNestedField(t *testing.T) {
 	_, err := ralphconfig.LoadBytes([]byte(`
 version: "1"
 agent:
-  command: "echo hello"
+  run_command: "echo hello"
   unknown_nested: 1
 git:
   commit: split
@@ -267,6 +268,191 @@ phases:
     steps: []
 `))
 	assertErrorCode(t, err, ralphconfig.ErrCodeConfigParse)
+}
+
+func TestLoadBytesAcceptsRunAndReviewCompletionProfiles(t *testing.T) {
+	t.Parallel()
+
+	_, err := ralphconfig.LoadBytes([]byte(`
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  run:
+    strategy: tail_match
+  review:
+    strategy: review_convergence
+`))
+	if err != nil {
+		t.Fatalf("LoadBytes returned error: %v", err)
+	}
+}
+
+func TestLoadBytesRejectsLegacyAgentCommandKey(t *testing.T) {
+	t.Parallel()
+
+	_, err := ralphconfig.LoadBytes([]byte(`
+version: "1"
+agent:
+  command: "echo hello"
+completion:
+  run:
+    strategy: tail_match
+  review:
+    strategy: review_convergence
+`))
+	assertErrorCode(t, err, ralphconfig.ErrCodeConfigParse)
+}
+
+func TestLoadBytesRejectsLegacyCompletionShape(t *testing.T) {
+	t.Parallel()
+
+	_, err := ralphconfig.LoadBytes([]byte(`
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  strategy: tail_match
+  signal: "<promise>COMPLETE</promise>"
+`))
+	assertErrorCode(t, err, ralphconfig.ErrCodeConfigParse)
+}
+
+func TestLoadBytesRejectsInvalidRunStrategy(t *testing.T) {
+	t.Parallel()
+
+	_, err := ralphconfig.LoadBytes([]byte(`
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  run:
+    strategy: review_convergence
+  review:
+    strategy: review_convergence
+`))
+	assertErrorContains(t, err, "completion.run.strategy must be tail_match")
+}
+
+func TestLoadBytesRejectsInvalidReviewStrategy(t *testing.T) {
+	t.Parallel()
+
+	_, err := ralphconfig.LoadBytes([]byte(`
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  run:
+    strategy: tail_match
+  review:
+    strategy: tail_match
+`))
+	assertErrorContains(t, err, "completion.review.strategy must be review_convergence")
+}
+
+func TestLoadBytesRejectsInvalidReviewConvergenceBounds(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name    string
+		yaml    string
+		wantErr string
+	}{
+		{
+			name: "min_reviews must be positive",
+			yaml: `
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  run:
+    strategy: tail_match
+  review:
+    strategy: review_convergence
+    review_convergence:
+      min_reviews: 0
+      max_reviews: 10
+      judge_every: 2
+      stable_rounds: 2
+`,
+			wantErr: "completion.review.review_convergence.min_reviews must be >= 1",
+		},
+		{
+			name: "max_reviews must be >= min_reviews",
+			yaml: `
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  run:
+    strategy: tail_match
+  review:
+    strategy: review_convergence
+    review_convergence:
+      min_reviews: 4
+      max_reviews: 3
+      judge_every: 2
+      stable_rounds: 2
+`,
+			wantErr: "completion.review.review_convergence.max_reviews must be >= min_reviews",
+		},
+		{
+			name: "judge_every must be positive",
+			yaml: `
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  run:
+    strategy: tail_match
+  review:
+    strategy: review_convergence
+    review_convergence:
+      min_reviews: 3
+      max_reviews: 10
+      judge_every: 0
+      stable_rounds: 2
+`,
+			wantErr: "completion.review.review_convergence.judge_every must be >= 1",
+		},
+		{
+			name: "stable_rounds must be positive",
+			yaml: `
+version: "1"
+agent:
+  run_command: "echo hello"
+completion:
+  run:
+    strategy: tail_match
+  review:
+    strategy: review_convergence
+    review_convergence:
+      min_reviews: 3
+      max_reviews: 10
+      judge_every: 2
+      stable_rounds: 0
+`,
+			wantErr: "completion.review.review_convergence.stable_rounds must be >= 1",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := ralphconfig.LoadBytes([]byte(tc.yaml))
+			assertErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
+func assertErrorContains(t *testing.T, err error, wantSubstring string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("expected error containing %q, got nil", wantSubstring)
+	}
+	if !strings.Contains(err.Error(), wantSubstring) {
+		t.Fatalf("error %q must contain %q", err.Error(), wantSubstring)
+	}
 }
 
 func assertErrorCode(t *testing.T, err error, wantCode string) {

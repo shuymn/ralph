@@ -17,9 +17,11 @@ const (
 	ArtifactPath     = "schemas/config.schema.json"
 	artifactFileMode = os.FileMode(0o600)
 
-	gitCommitModeTogether = "together"
-	stepOnFailContinue    = "continue"
-	stepUsesAutoCommit    = "auto_commit"
+	completionReviewConvergence = "review_convergence"
+	completionRunTailMatch      = "tail_match"
+	gitCommitModeTogether       = "together"
+	stepOnFailContinue          = "continue"
+	stepUsesAutoCommit          = "auto_commit"
 )
 
 var (
@@ -46,6 +48,98 @@ var runtimeConstraintPatches = []constraintPatch{
 		path: []string{"properties", "git", "properties", "commit"},
 		apply: func(target map[string]any) {
 			setEnum(target, ralphconfig.DefaultGitCommitMode, gitCommitModeTogether)
+		},
+	},
+	{
+		name: "completion.run.strategy enum",
+		path: []string{
+			"properties",
+			"completion",
+			"properties",
+			"run",
+			"properties",
+			"strategy",
+		},
+		apply: func(target map[string]any) {
+			setEnum(target, completionRunTailMatch)
+		},
+	},
+	{
+		name: "completion.review.strategy enum",
+		path: []string{
+			"properties",
+			"completion",
+			"properties",
+			"review",
+			"properties",
+			"strategy",
+		},
+		apply: func(target map[string]any) {
+			setEnum(target, completionReviewConvergence)
+		},
+	},
+	{
+		name: "completion.review.review_convergence.min_reviews minimum",
+		path: []string{
+			"properties",
+			"completion",
+			"properties",
+			"review",
+			"properties",
+			"review_convergence",
+			"properties",
+			"min_reviews",
+		},
+		apply: func(target map[string]any) {
+			setMinimumOne(target)
+		},
+	},
+	{
+		name: "completion.review.review_convergence.max_reviews minimum",
+		path: []string{
+			"properties",
+			"completion",
+			"properties",
+			"review",
+			"properties",
+			"review_convergence",
+			"properties",
+			"max_reviews",
+		},
+		apply: func(target map[string]any) {
+			setMinimumOne(target)
+		},
+	},
+	{
+		name: "completion.review.review_convergence.judge_every minimum",
+		path: []string{
+			"properties",
+			"completion",
+			"properties",
+			"review",
+			"properties",
+			"review_convergence",
+			"properties",
+			"judge_every",
+		},
+		apply: func(target map[string]any) {
+			setMinimumOne(target)
+		},
+	},
+	{
+		name: "completion.review.review_convergence.stable_rounds minimum",
+		path: []string{
+			"properties",
+			"completion",
+			"properties",
+			"review",
+			"properties",
+			"review_convergence",
+			"properties",
+			"stable_rounds",
+		},
+		apply: func(target map[string]any) {
+			setMinimumOne(target)
 		},
 	},
 	{
@@ -223,6 +317,10 @@ func setEnum(target map[string]any, values ...string) {
 		enum = append(enum, value)
 	}
 	target["enum"] = enum
+}
+
+func setMinimumOne(target map[string]any) {
+	target["minimum"] = 1
 }
 
 func setRunUsesXOR(target map[string]any) {
