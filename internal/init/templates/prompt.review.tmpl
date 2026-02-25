@@ -54,6 +54,12 @@ Resolve review scope before reviewing:
 ## Output Contract (Required: Do Not Remove)
 
 - Put findings first, sorted by severity (`critical`, `high`, `medium`, `low`).
+- Severity rubric:
+  - `critical`: Active exploit/security compromise, data loss/corruption, or system-wide outage with immediate impact.
+  - `high`: Clear bug/spec-miss/design flaw on normal or highly likely paths (not niche-only edge cases), or security weakness with material impact.
+  - `medium`: Real issue with bounded impact, uncommon-path failure, or contract-hardening gap; may become high only with stronger blast radius evidence.
+  - `low`: Minor robustness/quality issues (test gaps, maintainability, wording/diagnostics) with limited user impact.
+  - Edge-case-only findings should default to `medium` or `low` unless they demonstrably cause high-impact failures in realistic usage.
 - Keep field labels stable across rounds (`Finding-Key`, `File`, `Impact`, `Recommendation`).
 - For each finding, include:
   - `Finding-Key`: stable identifier for cross-round diffing (for example: `path:line:short_slug`).
