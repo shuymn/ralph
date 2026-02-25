@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/shuymn/ralph/main/schemas/config.schema.json
+version: "1"
+
+agent:
+  command: "codex --profile ralph exec"
+
+git:
+  commit: split
+  fallback_message: "feat: implement task (auto-commit)"
+  fallback_no_gpg_sign: true
+
+phases:
+  pre:
+    steps: []
+  post:
+    steps:
+      - name: quality gate
+        run: go mod tidy && task check
+      - name: auto_commit
+        uses: auto_commit
+        if: changed()
+        on_fail: stop_loop
