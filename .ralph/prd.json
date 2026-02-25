@@ -7,7 +7,7 @@
       "id": "task-1",
       "title": "Bootstrap `ralph init` scaffolding",
       "deps": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "task-2",
