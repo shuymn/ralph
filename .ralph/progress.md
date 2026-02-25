@@ -57,3 +57,21 @@ Started: 2026-02-25
   - Gotchas encountered
     - Legacy tests that asserted explicit `0` rejection conflicted with omission defaulting semantics in non-pointer numeric fields and needed boundary assertions anchored on negative values.
 ---
+## [2026-02-25] - [task-4]: Enforce Strict Judge JSON Contract
+- What was implemented
+  - Added regression tests `TestJudgeContractRejectsUnknownFields` and `TestJudgeContractRejectsNegativeNewFindings`.
+  - Added a shared helper in judge contract tests to run review mode against injected judge artifacts with consistent convergence settings.
+  - Switched judge artifact parsing to a strict JSON decoder with `DisallowUnknownFields()` while preserving required-field and negative-count validation.
+- DoD verification results
+  - RED (expected fail): `GOCACHE=$(pwd)/.cache/go-build go test ./internal/runner -run 'TestJudgeContractRejectsUnknownFields|TestJudgeContractRejectsNegativeNewFindings'` -> FAIL (`expected runtime exit code 22, got 0`).
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build go test ./internal/runner -run 'TestJudgeContractRejectsUnknownFields|TestJudgeContractRejectsNegativeNewFindings'`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task fmt`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task lint`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task test`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task build`
+- Learnings:
+  - Patterns discovered
+    - Contract JSON that controls loop convergence should use unknown-field rejection to preserve fail-closed behavior.
+  - Gotchas encountered
+    - Go commands needed a local `GOCACHE` path in this sandbox to avoid permission errors on the default cache location.
+---
