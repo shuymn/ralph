@@ -2,6 +2,7 @@
 Started: 2026-02-25
 
 ## Codebase Patterns
+- When YAML value fields must distinguish "omitted" from explicit zero, capture explicitness during unmarshalling and gate defaults on that flag so fail-fast validation can reject explicit invalid zeros.
 
 ## Progress Entries
 
@@ -74,4 +75,25 @@ Started: 2026-02-25
     - Contract JSON that controls loop convergence should use unknown-field rejection to preserve fail-closed behavior.
   - Gotchas encountered
     - Go commands needed a local `GOCACHE` path in this sandbox to avoid permission errors on the default cache location.
+---
+## [2026-02-25] - [task-5]: Validate `completion.run.tail_lines` at Load Time
+- What was implemented
+  - Added RED coverage `TestLoadBytesRejectsNonPositiveTailLines` for both `tail_lines: -1` and `tail_lines: 0`.
+  - Added schema regression assertion in `TestSchemaConstraints` requiring `completion.run.tail_lines.minimum = 1`.
+  - Implemented explicit `tail_lines` presence tracking during YAML unmarshal so omitted values still receive defaults while explicitly configured non-positive values fail validation.
+  - Added config validation guard `completion.run.tail_lines must be >= 1` and schema generator minimum patch for `completion.run.tail_lines`.
+  - Regenerated `schemas/config.schema.json` to include `"minimum": 1` for `tail_lines`.
+- DoD verification results
+  - RED (expected fail): `GOCACHE=$(pwd)/.cache/go-build go test ./internal/config ./internal/config/schema -run 'TestLoadBytesRejectsNonPositiveTailLines|TestSchemaConstraints'` -> FAIL (`expected error containing "completion.run.tail_lines must be >= 1", got nil` / `tail_lines.minimum = <nil>, want 1`).
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build go test ./internal/config ./internal/config/schema -run 'TestLoadBytesRejectsNonPositiveTailLines|TestSchemaConstraints'`
+  - PASS: `GIT_INDEX_FILE=/tmp/ralph-task5.index GIT_OBJECT_DIRECTORY=/tmp/ralph-task5.objects GIT_ALTERNATE_OBJECT_DIRECTORIES=$(pwd)/.git/objects GOCACHE=$(pwd)/.cache/go-build go test ./internal/config/... ./internal/config/schema/... && GIT_INDEX_FILE=/tmp/ralph-task5.index GIT_OBJECT_DIRECTORY=/tmp/ralph-task5.objects GIT_ALTERNATE_OBJECT_DIRECTORIES=$(pwd)/.git/objects GOCACHE=$(pwd)/.cache/go-build task schema && GIT_INDEX_FILE=/tmp/ralph-task5.index GIT_OBJECT_DIRECTORY=/tmp/ralph-task5.objects GIT_ALTERNATE_OBJECT_DIRECTORIES=$(pwd)/.git/objects git diff --exit-code -- schemas/config.schema.json`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task fmt`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task lint`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task test`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task build`
+- Learnings:
+  - Patterns discovered
+    - Fail-closed config semantics for scalar numerics can be preserved by combining explicit-value tracking at unmarshal time with default application only for omitted fields.
+  - Gotchas encountered
+    - The sandbox blocks writes to `.git/index`, so schema drift checks requiring `git diff --exit-code` needed an isolated temporary Git index/object directory to validate command semantics without touching repository metadata.
 ---
