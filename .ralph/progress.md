@@ -82,3 +82,19 @@ Started: 2026-02-25
   - Gotchas encountered
     - Repository lint rules require `exec.CommandContext` and exhaustive handling patterns; replacing enum `switch`es with guarded `if` branches avoided false positives while preserving strict error handling.
 ---
+## [2026-02-25] - [task-4]: Build the core run loop and completion checks
+- What was implemented
+  - Added `ralph run` CLI wiring (`cmd/ralph/run.go`) and hooked command dispatch in `cmd/ralph/init.go`.
+  - Implemented `internal/runner` loop orchestration with pre/main/post phase execution, `if` expression pre-compilation, `on_fail` handling, and stop-loop stderr logging (`[ralph] stop_loop phase=<phase> step=<step> reason=<reason>`).
+  - Implemented fixed main-step execution (`sh -c <agent.command>`), prompt stdin piping, stdout tmpfile capture, and post-main completion checks.
+  - Implemented completion gating against `.ralph/prd.json` + tail signal matching, including protocol mismatch exit (`21`) when all stories pass but completion signal is missing.
+  - Implemented tmpfile lifecycle cleanup for completion success, stop-loop exits, config/runtime errors, max-iteration exits, and signal-driven cancellation.
+  - Added integration-style runner tests for ordering, exit code mapping (`0/20/21/22/23`), stop-loop logging, protocol mismatch, and tmpfile cleanup scenarios (success/stop-loop/signal).
+  - Added no-op builtin dispatch placeholder for `uses: auto_commit` wiring to keep phase execution pluggable for task-5 implementation.
+- Learnings:
+  - Patterns discovered
+    - Compiling step `if` expressions once before loop start keeps runtime evaluation deterministic while surfacing syntax errors as pre-run config failures.
+    - Modeling phase execution around an explicit `success()/failure()` state flag makes `on_fail=continue` semantics straightforward across step chains.
+  - Gotchas encountered
+    - Repository lint rules require external-package tests (`runner_test`), static wrapped errors, and stricter test-file permissions (`0o600`) even for temp fixture files.
+---

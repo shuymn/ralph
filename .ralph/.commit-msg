@@ -1,1 +1,1 @@
-feat(condition): implement expression evaluator for step if
+feat(runner): build core run loop and completion checks
