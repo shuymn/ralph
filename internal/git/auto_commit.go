@@ -18,7 +18,9 @@ const (
 	CommitModeTogether = "together"
 
 	ralphOnlyPath        = ".ralph/"
+	noGPGSignFlag        = "--no-gpg-sign"
 	ralphCommitMessage   = "chore(ralph): mark %s complete in PRD and progress"
+	commitNoSignOverhead = 2
 	noStagedChangesCode  = 0
 	hasStagedChangesCode = 1
 )
@@ -49,6 +51,7 @@ type Options struct {
 	WorkingDir        string
 	Mode              string
 	FallbackMessage   string
+	FallbackNoGPGSign bool
 	PRDPath           string
 	CommitMessagePath string
 	BeforePRD         ralphprd.Document
@@ -122,7 +125,7 @@ func autoCommitSplit(ctx context.Context, opts Options) error {
 		}
 
 		message := fmt.Sprintf(ralphCommitMessage, taskID)
-		if err := runGitExpectSuccess(ctx, opts, "commit", "-m", message); err != nil {
+		if err := runGitCommit(ctx, opts, "-m", message); err != nil {
 			return err
 		}
 	}
@@ -168,9 +171,58 @@ func commitWithSource(
 	source commitMessageSource,
 ) error {
 	if source.useFile {
-		return runGitExpectSuccess(ctx, opts, "commit", "-F", source.value)
+		return runGitCommit(ctx, opts, "-F", source.value)
 	}
-	return runGitExpectSuccess(ctx, opts, "commit", "-m", source.value)
+	return runGitCommit(ctx, opts, "-m", source.value)
+}
+
+func runGitCommit(ctx context.Context, opts Options, args ...string) error {
+	commitArgs := make([]string, 0, len(args)+1)
+	commitArgs = append(commitArgs, "commit")
+	commitArgs = append(commitArgs, args...)
+
+	err := runGitExpectSuccess(ctx, opts, commitArgs...)
+	if err == nil {
+		return nil
+	}
+	if !opts.FallbackNoGPGSign || !isGPGSignFailure(err) {
+		return err
+	}
+
+	retryArgs := make([]string, 0, len(args)+commitNoSignOverhead)
+	retryArgs = append(retryArgs, "commit", noGPGSignFlag)
+	retryArgs = append(retryArgs, args...)
+	if retryErr := runGitExpectSuccess(ctx, opts, retryArgs...); retryErr != nil {
+		return fmt.Errorf("retry commit without gpg-sign: %w", retryErr)
+	}
+	return nil
+}
+
+func isGPGSignFailure(err error) bool {
+	reason := strings.ToLower(gitCommandFailureReason(err))
+	for _, marker := range []string{
+		"gpg failed to sign the data",
+		"gpg: signing failed",
+		"failed to sign the data",
+	} {
+		if strings.Contains(reason, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func gitCommandFailureReason(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	const reasonPrefix = " reason="
+	idx := strings.LastIndex(msg, reasonPrefix)
+	if idx == -1 {
+		return msg
+	}
+	return msg[idx+len(reasonPrefix):]
 }
 
 func unstagePathIfStaged(ctx context.Context, opts Options, pathspec string) error {
