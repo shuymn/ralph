@@ -12,6 +12,9 @@ const (
 	ExitCodeValidation = 22
 
 	ErrCodePRDParse            = "PRD_PARSE"
+	ErrCodePRDBranchRequired   = "PRD_BRANCH_REQUIRED"
+	ErrCodePRDBranchEmpty      = "PRD_BRANCH_EMPTY"
+	ErrCodePRDBranchMalformed  = "PRD_BRANCH_MALFORMED"
 	ErrCodePRDStoriesRequired  = "PRD_STORIES_REQUIRED"
 	ErrCodePRDStoriesEmpty     = "PRD_STORIES_EMPTY"
 	ErrCodePRDStoryMalformed   = "PRD_STORY_MALFORMED"
@@ -26,7 +29,8 @@ type Story struct {
 }
 
 type Document struct {
-	Stories []Story `json:"stories"`
+	BranchName string  `json:"branchName"`
+	Stories    []Story `json:"stories"`
 }
 
 type ValidationError struct {
@@ -59,6 +63,21 @@ func ValidateBytes(content []byte) (Document, error) {
 		return Document{}, err
 	}
 
+	rawBranchName, ok := topLevel["branchName"]
+	if !ok {
+		return Document{}, newValidationError(
+			ErrCodePRDBranchRequired,
+			"branchName field is required",
+		)
+	}
+	var branchName string
+	if err := json.Unmarshal(rawBranchName, &branchName); err != nil {
+		return Document{}, newValidationError(
+			ErrCodePRDBranchMalformed,
+			fmt.Sprintf("branchName must be a string: %v", err),
+		)
+	}
+
 	rawStories, ok := topLevel["stories"]
 	if !ok {
 		return Document{}, newValidationError(
@@ -73,7 +92,8 @@ func ValidateBytes(content []byte) (Document, error) {
 	}
 
 	doc := Document{
-		Stories: make([]Story, 0, len(rawStoryList)),
+		BranchName: branchName,
+		Stories:    make([]Story, 0, len(rawStoryList)),
 	}
 	for idx, rawStory := range rawStoryList {
 		story, err := parseStory(rawStory, idx)
@@ -173,7 +193,12 @@ func parseStory(rawStory json.RawMessage, idx int) (Story, error) {
 
 func Validate(doc *Document) error {
 	if doc == nil {
-		return newValidationError(ErrCodePRDStoriesRequired, "stories field is required")
+		return newValidationError(ErrCodePRDBranchRequired, "branchName field is required")
+	}
+
+	branchName := strings.TrimSpace(doc.BranchName)
+	if branchName == "" {
+		return newValidationError(ErrCodePRDBranchEmpty, "branchName must be non-empty")
 	}
 	if doc.Stories == nil {
 		return newValidationError(ErrCodePRDStoriesRequired, "stories field is required")
@@ -208,6 +233,8 @@ func Validate(doc *Document) error {
 		story.ID = id
 		seen[id] = struct{}{}
 	}
+
+	doc.BranchName = branchName
 
 	return nil
 }
