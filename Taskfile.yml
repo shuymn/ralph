@@ -6,6 +6,19 @@ vars:
   COVERAGE_FILE: coverage.out
   BIN_DIR: bin
   GOLANGCI_LINT_VERSION: v2.10.1
+  ROOT_DIR_ABS:
+    sh: pwd
+  CACHE_DIR: "{{.ROOT_DIR_ABS}}/.cache"
+  GO_BUILD_CACHE: "{{.CACHE_DIR}}/go-build"
+  GO_MOD_CACHE: "{{.CACHE_DIR}}/gomod"
+  GO_PATH: "{{.CACHE_DIR}}/gopath"
+  GOLANGCI_CACHE: "{{.CACHE_DIR}}/golangci-lint"
+
+env:
+  GOCACHE: "{{.GO_BUILD_CACHE}}"
+  GOMODCACHE: "{{.GO_MOD_CACHE}}"
+  GOPATH: "{{.GO_PATH}}"
+  GOLANGCI_LINT_CACHE: "{{.GOLANGCI_CACHE}}"
 
 tasks:
   default:
