@@ -57,6 +57,14 @@ func TestScaffoldCreatesTemplateFiles(t *testing.T) {
 		t.Fatalf("progress.md missing rendered date, got:\n%s", string(progressBytes))
 	}
 
+	prdBytes, err := os.ReadFile(filepath.Join(root, ".ralph", "prd.json"))
+	if err != nil {
+		t.Fatalf("failed reading prd.json: %v", err)
+	}
+	if !strings.Contains(string(prdBytes), `"branchName": "replace-with-branch-name"`) {
+		t.Fatalf("prd.json missing branchName scaffold, got:\n%s", string(prdBytes))
+	}
+
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output for fresh init, got: %s", stderr.String())
 	}
