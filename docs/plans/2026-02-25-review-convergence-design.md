@@ -239,6 +239,7 @@ validation 失敗時は既存同様 exit `22`。
 - 本設計は config 仕様の breaking change を含む。
   - `agent.command` は廃止し、`agent.run_command` を必須とする。
   - completion 設定は command 別 profile（`completion.run` / `completion.review`）へ移行する。
+  - 段階移行のために置いた internal compatibility alias は移行完了後に撤去する（[ADR 0005](../adr/0005-remove-config-compatibility-aliases.md)）。
 - `review_convergence` は `ralph review` 実行時にのみ評価する。
 - 終了コード体系は維持し、非収斂上限は `23` を再利用する。
 - `ralph review` は新規導入だが、設定ファイルは分割せず `.ralph/config.yml` 1 枚を継続利用する。
@@ -275,6 +276,7 @@ validation 失敗時は既存同様 exit `22`。
 |-----|----------|--------|
 | [0001](../adr/0001-go-runner-over-shell-generation.md) | Go runner が config を直接実行する | Accepted |
 | [0004](../adr/0004-review-convergence-mode.md) | command 別 completion profile と `ralph review` を導入し、judge JSON で収斂判定する | Proposed |
+| [0005](../adr/0005-remove-config-compatibility-aliases.md) | 段階移行用の internal compatibility alias を撤去し、`run_command` / `completion.run` を唯一の SoT にする | Accepted |
 
 ## Open Questions
 
