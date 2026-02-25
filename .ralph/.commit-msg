@@ -1,1 +1,1 @@
-feat(git): implement builtin uses auto_commit
+feat(runner): add dry-run execution plan output

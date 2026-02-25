@@ -5,6 +5,7 @@ Started: 2026-02-25
 - Prefer a template manifest (`output path`, `template path`, `render`) plus one shared write pipeline for consistent scaffold diagnostics.
 - Classify loader failures into `parse` vs `validation` error kinds so runner exit mapping can stay deterministic.
 - Hide external command execution behind package-local interfaces so behavior can be tested with strict command-order assertions instead of shelling out in tests.
+- Reuse a single `run`/`dry-run` execution-plan loader (config + `if` compile + PRD validation) to keep validation behavior identical across execution modes.
 
 ## Progress Entries
 ## [2026-02-25] - [task-1]: Bootstrap `ralph init` scaffolding
@@ -115,4 +116,21 @@ Started: 2026-02-25
     - A dedicated command-runner interface makes git orchestration testable without relying on live repository state.
   - Gotchas encountered
     - `wrapcheck` enforcement requires explicit error wrapping at external package call boundaries (git runner + builtin dispatch).
+---
+## [2026-02-25] - [task-6]: Add `ralph run --dry-run` plan output
+- What was implemented
+  - Added `runner.DryRun` to render a validated execution plan that includes paths, agent settings, completion config, git config, PRD story count, and pre/main/post steps (`name`, `run/uses`, `if`, `on_fail`).
+  - Added shared execution-plan loading in `internal/runner` so normal run and dry-run use the same config load, `if` parse/compile, and PRD validation path.
+  - Added CLI flag handling in `cmd/ralph/run.go` for `ralph run --dry-run`.
+  - Added dry-run tests covering required output fields, validation parity with `Run`, and command non-execution guarantees.
+- DoD verification results
+  - `task fmt`: pass
+  - `task lint`: pass
+  - `task test`: pass
+  - `task check`: pass
+- Learnings:
+  - Patterns discovered
+    - A dedicated dry-run renderer plus shared plan-loading helper keeps visibility features from drifting away from runtime semantics.
+  - Gotchas encountered
+    - Config defaults (for example `agent.sleep_seconds`) affect dry-run output and should be asserted via validated values, not raw fixture input.
 ---
