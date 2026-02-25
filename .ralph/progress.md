@@ -115,3 +115,21 @@ Started: 2026-02-25
   - Gotchas encountered
     - This story was test-coverage-only: the runtime contract already rejected empty files, so GREEN was achieved by adding missing regression assertions rather than behavior changes.
 ---
+## [2026-02-25] - [task-7]: Expand Review-Convergence Boundary Coverage
+- What was implemented
+  - Expanded `TestLoadBytesAppliesReviewConvergencePartialDefaults` coverage for `judge_every`-only and `stable_rounds`-only partial overrides while keeping default-fill assertions centralized.
+  - Added `TestReviewSchedulerRespectsMinReviewsBeforeJudge` to lock scheduler ordering when `min_reviews` is greater than `judge_every`.
+  - Added `TestReviewStableCountResetsOnUnstableJudge` to verify that an unstable judge result resets convergence stability and prevents false convergence at the max-review boundary.
+- DoD verification results
+  - RED signal (coverage gap): `GOCACHE=$(pwd)/.cache/go-build go test ./internal/config ./internal/runner -run 'TestLoadBytesAppliesReviewConvergencePartialDefaults|TestReviewSchedulerRespectsMinReviewsBeforeJudge|TestReviewStableCountResetsOnUnstableJudge'` initially reported `[no tests to run]` for the runner side before adding task-7 tests.
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build go test ./internal/config ./internal/runner -run 'TestLoadBytesAppliesReviewConvergencePartialDefaults|TestReviewSchedulerRespectsMinReviewsBeforeJudge|TestReviewStableCountResetsOnUnstableJudge'`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task fmt`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build GOLANGCI_LINT_CACHE=$(pwd)/.cache/golangci-lint task lint`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task test`
+  - PASS: `GOCACHE=$(pwd)/.cache/go-build task build`
+- Learnings:
+  - Patterns discovered
+    - For review scheduler boundary coverage, role-log assertions on the first judge index provide stable validation without coupling to internal scheduler state.
+  - Gotchas encountered
+    - Sandbox restrictions require a workspace-local `GOCACHE` for Go test/build commands.
+---
