@@ -38,6 +38,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		}
 		fmt.Fprintln(stdout, "initialized .ralph scaffolding")
 		return 0
+	case "run":
+		return RunRun(".", args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command: %s\n", args[0])
 		return 1
