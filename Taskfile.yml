@@ -102,11 +102,16 @@ tasks:
 
   schema:check:
     desc: Verify config schema artifact has no drift
-    deps:
-      - task: schema
-        silent: true
     cmds:
-      - git diff --exit-code -- schemas/config.schema.json
+      - |
+        before_schema="$(mktemp)"
+        trap 'rm -f "$before_schema"' EXIT
+        cp schemas/config.schema.json "$before_schema"
+        task schema
+        if ! cmp -s "$before_schema" schemas/config.schema.json; then
+          echo "schemas/config.schema.json drift detected after regeneration. Run 'task schema' and keep the generated file."
+          exit 1
+        fi
 
   check:
     desc: Run all checks (schema drift, lint, build, test)
