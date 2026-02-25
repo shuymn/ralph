@@ -61,7 +61,7 @@ func TestScaffoldCreatesTemplateFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed reading prd.json: %v", err)
 	}
-	if !strings.Contains(string(prdBytes), `"branchName": "replace-with-branch-name"`) {
+	if !strings.Contains(string(prdBytes), `"branchName": "[replace-with-branch-name]"`) {
 		t.Fatalf("prd.json missing branchName scaffold, got:\n%s", string(prdBytes))
 	}
 
