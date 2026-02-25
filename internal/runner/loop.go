@@ -70,6 +70,7 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 		WorkingDir:        opts.WorkingDir,
 		Mode:              plan.Git.Commit,
 		FallbackMessage:   plan.Git.FallbackMessage,
+		FallbackNoGPGSign: plan.Git.FallbackNoGPGSign,
 		PRDPath:           paths.PRD,
 		CommitMessagePath: paths.CommitMessage,
 	}

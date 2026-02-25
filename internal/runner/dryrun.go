@@ -51,6 +51,7 @@ func renderDryRunPlan(stdout io.Writer, plan runPlan) {
 	renderDryRunSteps(stdout, "post", plan.PostSteps)
 	_, _ = fmt.Fprintf(stdout, "git.commit: %s\n", plan.Git.Commit)
 	_, _ = fmt.Fprintf(stdout, "git.fallback_message: %s\n", plan.Git.FallbackMessage)
+	_, _ = fmt.Fprintf(stdout, "git.fallback_no_gpg_sign: %t\n", plan.Git.FallbackNoGPGSign)
 	_, _ = fmt.Fprintf(stdout, "completion.strategy: %s\n", plan.Completion.Strategy)
 	_, _ = fmt.Fprintf(stdout, "completion.signal: %s\n", plan.Completion.Signal)
 	_, _ = fmt.Fprintf(stdout, "completion.tail_lines: %d\n", plan.Completion.TailLines)

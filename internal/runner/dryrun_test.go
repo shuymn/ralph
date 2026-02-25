@@ -38,8 +38,9 @@ func TestDryRunPrintsExecutionPlanAndSkipsCommandExecution(t *testing.T) {
 			TailLines: 9,
 		},
 		Git: ralphconfig.Git{
-			Commit:          "together",
-			FallbackMessage: "chore: fallback message",
+			Commit:            "together",
+			FallbackMessage:   "chore: fallback message",
+			FallbackNoGPGSign: true,
 		},
 		Phases: ralphconfig.Phases{
 			Pre: ralphconfig.Phase{
@@ -102,6 +103,7 @@ func TestDryRunPrintsExecutionPlanAndSkipsCommandExecution(t *testing.T) {
 		"on_fail: stop_loop",
 		"git.commit: together",
 		"git.fallback_message: chore: fallback message",
+		"git.fallback_no_gpg_sign: true",
 		"completion.strategy: tail_match",
 		"completion.signal: <done>COMPLETE</done>",
 		"completion.tail_lines: 9",
