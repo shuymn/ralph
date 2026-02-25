@@ -62,27 +62,16 @@ type builtinContext struct {
 	BeforePRD         prd.Document
 }
 
+type executionPlan struct {
+	Config    config.Config
+	PreSteps  []compiledStep
+	PostSteps []compiledStep
+	PRD       prd.Document
+}
+
 func Run(opts Options) int {
-	resolved := resolveOptions(opts)
-
-	cfg, err := config.Load(resolved.ConfigPath)
+	resolved, plan, err := loadExecutionPlan(opts)
 	if err != nil {
-		logError(resolved.Stderr, err)
-		return ExitCodeConfigError
-	}
-
-	compiledPre, err := compilePhase(phasePre, cfg.Phases.Pre.Steps)
-	if err != nil {
-		logError(resolved.Stderr, err)
-		return ExitCodeConfigError
-	}
-	compiledPost, err := compilePhase(phasePost, cfg.Phases.Post.Steps)
-	if err != nil {
-		logError(resolved.Stderr, err)
-		return ExitCodeConfigError
-	}
-
-	if _, err := prd.Load(resolved.PRDPath); err != nil {
 		logError(resolved.Stderr, err)
 		return ExitCodeConfigError
 	}
@@ -95,7 +84,45 @@ func Run(opts Options) int {
 		go watchSignals(ctx, resolved.Signals, signalReceived, cancel)
 	}
 
-	return runLoop(ctx, resolved, cfg, compiledPre, compiledPost, signalReceived)
+	return runLoop(
+		ctx,
+		resolved,
+		plan.Config,
+		plan.PreSteps,
+		plan.PostSteps,
+		signalReceived,
+	)
+}
+
+func loadExecutionPlan(opts Options) (Options, executionPlan, error) {
+	resolved := resolveOptions(opts)
+
+	cfg, err := config.Load(resolved.ConfigPath)
+	if err != nil {
+		return resolved, executionPlan{}, fmt.Errorf("load config: %w", err)
+	}
+
+	compiledPre, err := compilePhase(phasePre, cfg.Phases.Pre.Steps)
+	if err != nil {
+		return resolved, executionPlan{}, err
+	}
+
+	compiledPost, err := compilePhase(phasePost, cfg.Phases.Post.Steps)
+	if err != nil {
+		return resolved, executionPlan{}, err
+	}
+
+	doc, err := prd.Load(resolved.PRDPath)
+	if err != nil {
+		return resolved, executionPlan{}, fmt.Errorf("load prd: %w", err)
+	}
+
+	return resolved, executionPlan{
+		Config:    cfg,
+		PreSteps:  compiledPre,
+		PostSteps: compiledPost,
+		PRD:       doc,
+	}, nil
 }
 
 func runLoop(
