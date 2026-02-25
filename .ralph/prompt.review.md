@@ -68,10 +68,21 @@ Resolve review scope before reviewing:
   - `medium`: Real issue with bounded impact, uncommon-path failure, or contract-hardening gap; may become high only with stronger blast radius evidence.
   - `low`: Minor robustness/quality issues (test gaps, maintainability, wording/diagnostics) with limited user impact.
   - Edge-case-only findings should default to `medium` or `low` unless they demonstrably cause high-impact failures in realistic usage.
-- Keep field labels stable across rounds (`Finding-Key`, `File`, `Impact`, `Recommendation`).
+- Fix-effort rubric (for a single coding-agent run):
+  - `XXS` (`1` point): Very likely one-pass; tiny/localized fix (typically 1-2 files, one function or one test addition).
+  - `XS` (`2` points): Likely one-pass; small scoped change (typically 2-4 files in one package/domain).
+  - `S` (`3` points): One-pass possible but tighter; moderate scoped change (typically 4-8 files and/or multiple tests).
+  - `M` (`5` points): One-pass uncertain; cross-package or higher-branching changes.
+  - `L` (`8` points): One-pass unlikely; broad refactor or staged design-level work.
+  - Tie-break rule: if unsure between two levels, choose the higher level; if the change spans multiple packages, use at least `S`.
+- Keep field labels stable across rounds (`Finding-Key`, `File`, `Impact`, `Recommendation`, `Fix-Effort`, `Fix-Points`).
 - For each finding, include:
   - `Finding-Key`: stable identifier for cross-round diffing (for example: `path:line:short_slug`).
   - `File`: concrete file path with line reference.
   - `Impact`: why the issue matters.
   - `Recommendation`: concrete fix direction.
-- If no issues are found, state that explicitly.
+  - `Fix-Effort`: `XXS` | `XS` | `S` | `M` | `L`.
+  - `Fix-Points`: numeric score mapped from effort (`1`/`2`/`3`/`5`/`8`).
+- Add `Fix-Total-Points` as the sum of all finding points in this review.
+- Output `Fix-Total-Points` exactly once at the end of the report.
+- If no issues are found, state that explicitly and set `Fix-Total-Points: 0`.
