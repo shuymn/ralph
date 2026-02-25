@@ -28,20 +28,25 @@ You are the `judge` role in review convergence mode.
 6. Set `signal`:
    - `<promise>COMPLETE</promise>` only when `new_findings` is `0`.
    - otherwise use a non-complete value such as `CONTINUE`.
+7. Recompute all fields from scratch each round; do not reuse prior JSON output.
 
 If a review omits explicit `Finding-Key`, derive a stable fallback key from `file:line:summary-slug`.
 
 ## Output Contract (Required: Do Not Remove)
 
-Return ONLY valid JSON with this exact shape:
+Return ONLY valid JSON with exactly these keys and value types:
 {
-  "signal": "<promise>COMPLETE</promise>",
+  "signal": "<string>",
   "new_findings": 0,
-  "new_finding_keys": []
+  "new_finding_keys": ["<string>"]
 }
 
 Rules:
+- Values must be computed from the current comparison result, not copied from the example.
+- Do not keep `new_findings` or `new_finding_keys` static across rounds.
 - `signal` must be a string.
 - `new_findings` must be a non-negative integer.
 - `new_finding_keys` must be an array of strings.
+- `new_findings` must equal the number of entries in `new_finding_keys`.
+- Use `<promise>COMPLETE</promise>` only when `new_findings` is `0`; otherwise use a non-complete value.
 - Do not output Markdown, prose, or code fences.
