@@ -51,7 +51,6 @@ func TestJudgeContractValidation(t *testing.T) {
 			writeFile(t, filepath.Join(root, ".ralph", "prompt.judge.md"), tc.judgeOutput)
 
 			cfg := testConfig("cat", nil, nil)
-			cfg.Agent.Command = ""
 			cfg.Agent.MaxIterations = 3
 			cfg.Completion.Review.Signal = "READY"
 			cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{

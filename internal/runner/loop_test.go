@@ -93,8 +93,6 @@ func TestRunUsesPromptRunPath(t *testing.T) {
 		nil,
 		nil,
 	)
-	cfg.Agent.RunCommand = cfg.Agent.Command
-	cfg.Agent.Command = ""
 
 	code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
 		WorkingDir: root,
@@ -149,8 +147,6 @@ func TestReviewRequiresPromptFiles(t *testing.T) {
 			writeFile(t, filepath.Join(root, ".ralph", tc.presentPromptFile), tc.presentPromptValue)
 
 			cfg := testConfig("printf '"+ralphconfig.DefaultCompletionSignal+"\\n'", nil, nil)
-			cfg.Agent.RunCommand = cfg.Agent.Command
-			cfg.Agent.Command = ""
 			cfg.Completion.Run = ralphconfig.RunCompletionProfile{
 				Strategy:  ralphconfig.DefaultRunCompletionStrategy,
 				Signal:    ralphconfig.DefaultCompletionSignal,
@@ -166,9 +162,6 @@ func TestReviewRequiresPromptFiles(t *testing.T) {
 					StableRounds: ralphconfig.DefaultReviewStableRounds,
 				},
 			}
-			cfg.Completion.Strategy = ""
-			cfg.Completion.Signal = ""
-			cfg.Completion.TailLines = 0
 
 			var stderr bytes.Buffer
 			code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
@@ -239,7 +232,6 @@ func TestRoleCommandFallback(t *testing.T) {
 			)
 			cfg.Agent.ReviewCommand = ""
 			cfg.Agent.JudgeCommand = ""
-			cfg.Agent.Command = ""
 			cfg.Completion.Run = ralphconfig.RunCompletionProfile{
 				Strategy:  ralphconfig.DefaultRunCompletionStrategy,
 				Signal:    ralphconfig.DefaultCompletionSignal,
@@ -255,9 +247,6 @@ func TestRoleCommandFallback(t *testing.T) {
 					StableRounds: ralphconfig.DefaultReviewStableRounds,
 				},
 			}
-			cfg.Completion.Strategy = ""
-			cfg.Completion.Signal = ""
-			cfg.Completion.TailLines = 0
 
 			code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
 				WorkingDir: root,
@@ -458,7 +447,6 @@ func TestReviewConvergenceStableRounds(t *testing.T) {
 	)
 
 	cfg := testConfig("cat", nil, nil)
-	cfg.Agent.Command = ""
 	cfg.Agent.MaxIterations = 6
 	cfg.Completion.Review.Signal = "READY"
 	cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{
@@ -497,7 +485,6 @@ func TestReviewNonConvergenceReturns23(t *testing.T) {
 	)
 
 	cfg := testConfig("cat", nil, nil)
-	cfg.Agent.Command = ""
 	cfg.Agent.MaxIterations = 6
 	cfg.Completion.Review.Signal = "READY"
 	cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{
@@ -540,7 +527,6 @@ func TestReviewLogsRemainFreeForm(t *testing.T) {
 	)
 
 	cfg := testConfig("cat; printf 'free-form stderr line\\n' >&2", nil, nil)
-	cfg.Agent.Command = ""
 	cfg.Agent.MaxIterations = 4
 	cfg.Completion.Review.Signal = "READY"
 	cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{
@@ -757,7 +743,6 @@ func testConfig(
 		Version: ralphconfig.SupportedVersion,
 		Agent: ralphconfig.Agent{
 			RunCommand:    agentCommand,
-			Command:       agentCommand,
 			MaxIterations: 1,
 			SleepSeconds:  0,
 		},
@@ -777,9 +762,6 @@ func testConfig(
 					StableRounds: ralphconfig.DefaultReviewStableRounds,
 				},
 			},
-			Strategy:  ralphconfig.DefaultCompletionStrategy,
-			Signal:    ralphconfig.DefaultCompletionSignal,
-			TailLines: ralphconfig.DefaultCompletionTailLines,
 		},
 		Git: ralphconfig.Git{
 			Commit:          ralphconfig.DefaultGitCommitMode,

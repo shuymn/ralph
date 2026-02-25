@@ -418,7 +418,7 @@ func sleep(ctx context.Context, duration time.Duration, sleepFn func(time.Durati
 func completeIteration(
 	mainResult mainResult,
 	prdPath string,
-	completionCfg ralphconfig.Completion,
+	completionCfg ralphconfig.RunCompletionProfile,
 	tracker *tmpTracker,
 ) (int, error) {
 	defer tracker.cleanup(mainResult.OutputPath)
@@ -468,7 +468,7 @@ func completeModeIteration(
 	return completeIteration(
 		mainResult,
 		prdPath,
-		iterationPlan.Completion,
+		iterationPlan.RunCompletion,
 		tracker,
 	)
 }

@@ -16,11 +16,11 @@ var (
 )
 
 type modePlan struct {
-	Mode       Mode
-	Role       Role
-	Command    string
-	PromptPath string
-	Completion ralphconfig.Completion
+	Mode          Mode
+	Role          Role
+	Command       string
+	PromptPath    string
+	RunCompletion ralphconfig.RunCompletionProfile
 }
 
 func resolveModePlan(
@@ -41,11 +41,11 @@ func resolveModePlan(
 			return modePlan{}, err
 		}
 		return modePlan{
-			Mode:       ModeRun,
-			Role:       RoleRun,
-			Command:    runCommand,
-			PromptPath: paths.PromptRun,
-			Completion: resolveRunCompletion(cfg.Completion),
+			Mode:          ModeRun,
+			Role:          RoleRun,
+			Command:       runCommand,
+			PromptPath:    paths.PromptRun,
+			RunCompletion: resolveRunCompletion(cfg.Completion.Run),
 		}, nil
 	case ModeReview:
 		if err := requirePrompt(paths.PromptReview); err != nil {
@@ -57,11 +57,11 @@ func resolveModePlan(
 
 		resolvedRole := normalizeReviewRole(role)
 		return modePlan{
-			Mode:       ModeReview,
-			Role:       resolvedRole,
-			Command:    resolveRoleCommand(cfg.Agent, resolvedRole, runCommand),
-			PromptPath: resolveRolePromptPath(paths, resolvedRole),
-			Completion: resolveRunCompletion(cfg.Completion),
+			Mode:          ModeReview,
+			Role:          resolvedRole,
+			Command:       resolveRoleCommand(cfg.Agent, resolvedRole, runCommand),
+			PromptPath:    resolveRolePromptPath(paths, resolvedRole),
+			RunCompletion: resolveRunCompletion(cfg.Completion.Run),
 		}, nil
 	default:
 		return modePlan{}, fmt.Errorf("%w: %q", errUnsupportedMode, resolvedMode)
@@ -69,10 +69,7 @@ func resolveModePlan(
 }
 
 func resolveRunCommand(agent ralphconfig.Agent) string {
-	if runCommand := strings.TrimSpace(agent.RunCommand); runCommand != "" {
-		return runCommand
-	}
-	return strings.TrimSpace(agent.Command)
+	return strings.TrimSpace(agent.RunCommand)
 }
 
 func resolveRoleCommand(agent ralphconfig.Agent, role Role, runCommand string) string {
@@ -125,29 +122,22 @@ func normalizeReviewRole(role Role) Role {
 	}
 }
 
-func resolveRunCompletion(completion ralphconfig.Completion) ralphconfig.Completion {
-	resolved := completion
+func resolveRunCompletion(
+	profile ralphconfig.RunCompletionProfile,
+) ralphconfig.RunCompletionProfile {
+	resolved := profile
 
-	strategy := strings.TrimSpace(resolved.Run.Strategy)
-	if strategy == "" {
-		strategy = strings.TrimSpace(resolved.Strategy)
-	}
+	strategy := strings.TrimSpace(resolved.Strategy)
 	if strategy == "" {
 		strategy = ralphconfig.DefaultRunCompletionStrategy
 	}
 
-	signal := strings.TrimSpace(resolved.Run.Signal)
-	if signal == "" {
-		signal = strings.TrimSpace(resolved.Signal)
-	}
+	signal := strings.TrimSpace(resolved.Signal)
 	if signal == "" {
 		signal = ralphconfig.DefaultCompletionSignal
 	}
 
-	tailLines := resolved.Run.TailLines
-	if tailLines <= 0 {
-		tailLines = resolved.TailLines
-	}
+	tailLines := resolved.TailLines
 	if tailLines <= 0 {
 		tailLines = ralphconfig.DefaultRunCompletionTailLines
 	}

@@ -46,7 +46,6 @@ func TestReviewSchedulerRules(t *testing.T) {
 		nil,
 		nil,
 	)
-	cfg.Agent.Command = ""
 	cfg.Agent.MaxIterations = 6
 	cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{
 		MinReviews:   2,
@@ -117,7 +116,6 @@ func TestReviewSchedulerMaxReviewsBoundary(t *testing.T) {
 		nil,
 		nil,
 	)
-	cfg.Agent.Command = ""
 	cfg.Agent.MaxIterations = 4
 	cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{
 		MinReviews:   1,
@@ -178,7 +176,6 @@ func TestReviewRunIDFormatAndArtifactNaming(t *testing.T) {
 	)
 
 	cfg := testConfig("cat", nil, nil)
-	cfg.Agent.Command = ""
 	cfg.Agent.MaxIterations = 2
 	cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{
 		MinReviews:   1,

@@ -118,8 +118,6 @@ func Validate(cfg *Config) error {
 }
 
 func applyDefaults(cfg *Config) {
-	cfg.Agent.Command = cfg.Agent.RunCommand
-
 	if cfg.Agent.MaxIterations == 0 {
 		cfg.Agent.MaxIterations = DefaultAgentMaxIterations
 	}
@@ -155,10 +153,6 @@ func applyDefaults(cfg *Config) {
 			StableRounds: DefaultReviewStableRounds,
 		}
 	}
-
-	cfg.Completion.Strategy = cfg.Completion.Run.Strategy
-	cfg.Completion.Signal = cfg.Completion.Run.Signal
-	cfg.Completion.TailLines = cfg.Completion.Run.TailLines
 
 	if strings.TrimSpace(cfg.Git.Commit) == "" {
 		cfg.Git.Commit = DefaultGitCommitMode

@@ -16,9 +16,6 @@ const (
 	DefaultReviewJudgeEvery   = 2
 	DefaultReviewStableRounds = 2
 
-	DefaultCompletionStrategy  = DefaultRunCompletionStrategy
-	DefaultCompletionTailLines = DefaultRunCompletionTailLines
-
 	DefaultGitCommitMode  = "split"
 	DefaultFallbackCommit = "feat: implement task (auto-commit)"
 
@@ -38,17 +35,13 @@ type Agent struct {
 	RunCommand    string `json:"run_command"              yaml:"run_command"`    //nolint:tagliatelle // External schema key uses snake_case.
 	ReviewCommand string `json:"review_command,omitempty" yaml:"review_command"` //nolint:tagliatelle // External schema key uses snake_case.
 	JudgeCommand  string `json:"judge_command,omitempty"  yaml:"judge_command"`  //nolint:tagliatelle // External schema key uses snake_case.
-	Command       string `json:"-"                        yaml:"-"`              // Compatibility alias.
 	MaxIterations int    `json:"max_iterations,omitempty" yaml:"max_iterations"` //nolint:tagliatelle // External schema key uses snake_case.
 	SleepSeconds  int    `json:"sleep_seconds,omitempty"  yaml:"sleep_seconds"`  //nolint:tagliatelle // External schema key uses snake_case.
 }
 
 type Completion struct {
-	Run       RunCompletionProfile    `json:"run,omitzero"    yaml:"run"`
-	Review    ReviewCompletionProfile `json:"review,omitzero" yaml:"review"`
-	Strategy  string                  `json:"-"               yaml:"-"` // Compatibility alias.
-	Signal    string                  `json:"-"               yaml:"-"` // Compatibility alias.
-	TailLines int                     `json:"-"               yaml:"-"` // Compatibility alias.
+	Run    RunCompletionProfile    `json:"run,omitzero"    yaml:"run"`
+	Review ReviewCompletionProfile `json:"review,omitzero" yaml:"review"`
 }
 
 type RunCompletionProfile struct {

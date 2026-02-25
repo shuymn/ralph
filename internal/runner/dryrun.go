@@ -79,9 +79,9 @@ func renderRunDryRunPlan(stdout io.Writer, plan runPlan, modePlan modePlan) {
 	_, _ = fmt.Fprintf(stdout, "agent.sleep_seconds: %d\n", plan.Agent.SleepSeconds)
 	_, _ = fmt.Fprintf(stdout, "prompt.run_path: %s\n", modePlan.PromptPath)
 	renderDryRunPlanCommon(stdout, plan)
-	_, _ = fmt.Fprintf(stdout, "completion.run.strategy: %s\n", modePlan.Completion.Strategy)
-	_, _ = fmt.Fprintf(stdout, "completion.run.signal: %s\n", modePlan.Completion.Signal)
-	_, _ = fmt.Fprintf(stdout, "completion.run.tail_lines: %d\n", modePlan.Completion.TailLines)
+	_, _ = fmt.Fprintf(stdout, "completion.run.strategy: %s\n", modePlan.RunCompletion.Strategy)
+	_, _ = fmt.Fprintf(stdout, "completion.run.signal: %s\n", modePlan.RunCompletion.Signal)
+	_, _ = fmt.Fprintf(stdout, "completion.run.tail_lines: %d\n", modePlan.RunCompletion.TailLines)
 }
 
 func renderReviewDryRunPlan(

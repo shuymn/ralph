@@ -29,7 +29,6 @@ func TestDryRunRunProfileOutput(t *testing.T) {
 		Version: ralphconfig.SupportedVersion,
 		Agent: ralphconfig.Agent{
 			RunCommand:    "printf 'agent-ran' > " + shQuote(agentMarker),
-			Command:       "printf 'agent-ran' > " + shQuote(agentMarker),
 			MaxIterations: 7,
 			SleepSeconds:  11,
 		},
@@ -49,9 +48,6 @@ func TestDryRunRunProfileOutput(t *testing.T) {
 					StableRounds: ralphconfig.DefaultReviewStableRounds,
 				},
 			},
-			Strategy:  ralphconfig.DefaultCompletionStrategy,
-			Signal:    "<done>COMPLETE</done>",
-			TailLines: 9,
 		},
 		Git: ralphconfig.Git{
 			Commit:            "together",
