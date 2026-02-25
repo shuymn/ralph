@@ -3,6 +3,7 @@ Started: 2026-02-25
 
 ## Codebase Patterns
 - During staged config migrations, keep strict YAML key validation by removing old YAML tags and expose temporary in-memory aliases with `json:"-" yaml:"-"` to avoid cross-package breakage.
+- For mode-based loop extensions, keep explicit role overrides authoritative and enable automatic scheduler behavior only when role is unset.
 
 ## Progress Entries
 ## [2026-02-25] - [task-1]: Refactor config model to command profiles
@@ -59,4 +60,22 @@ Started: 2026-02-25
     - Centralizing mode/role resolution into a dedicated plan object keeps loop orchestration stable while enabling role-specific command/prompt contracts.
   - Gotchas encountered
     - Repository-local Go module caches can contain read-only files; transient cache cleanup may require permission normalization before deletion in sandboxed runs.
+---
+## [2026-02-25] - [task-4]: Implement review scheduler state and artifact lifecycle
+- What was implemented
+  - Added review runtime state (`review_count`, `reviews_since_judge`, `judge_count`, `run_id`) with UTC `YYYYMMDDTHHMMSSZ` formatting.
+  - Added pure review role scheduler logic for `min_reviews`, `judge_every`, and `max_reviews` boundaries.
+  - Added deterministic artifact path management for `.ralph/reviews/<run_id>/REVIEW_0001.md` and `JUDGE_0001.json`.
+  - Integrated review-mode loop scheduling/persistence in `internal/runner/loop.go` while preserving explicit role override behavior.
+  - Added `internal/runner/review_scheduler_test.go` covering scheduling rules, max-review boundary behavior, and run_id/artifact naming.
+- DoD verification results
+  - `go test ./internal/runner -run 'TestReviewSchedulerRules|TestReviewSchedulerMaxReviewsBoundary|TestReviewRunIDFormatAndArtifactNaming'`: PASS
+  - `task fmt`: PASS
+  - `task lint`: PASS
+  - `task test`: PASS
+- Learnings:
+  - Patterns discovered
+    - Review artifact persistence can be layered onto existing temp-output execution by copying role outputs into deterministic review directories.
+  - Gotchas encountered
+    - Full-suite regressions can occur when auto-scheduling overrides previously explicit role pathways; keeping role override precedence avoids compatibility breaks.
 ---
