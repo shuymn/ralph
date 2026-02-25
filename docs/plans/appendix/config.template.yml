@@ -14,6 +14,7 @@ agent:
 git:
   commit: split
   fallback_message: "feat: implement task (auto-commit)"
+  fallback_no_gpg_sign: true
 
 phases:
   pre:
