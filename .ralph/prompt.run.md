@@ -14,8 +14,9 @@ You are running in the `ralph` repository root (Go CLI project).
 Loop files are in `.ralph/`, plans live in `docs/plans/`, and ADRs live in `docs/adr/`.
 CLI entrypoints are `main.go` and `cmd/ralph/*` (`init`, `run`, `review`, and dry-run variants).
 Business logic is domain-driven under `internal/*`, with core packages `config`, `runner`, `git`, `condition`, `prd`, and `init`.
-The active plan introduces review convergence: command-specific config profiles (`completion.run`/`completion.review`), mode/role-aware runner behavior, and review/judge scheduling and JSON contract checks.
-Tech stack and tooling: Go, YAML validation/schema generation, JSON parsing, existing runner/git flows, and Task (`Taskfile.yml`).
+Active plan: `docs/plans/2026-02-25-review-feedback-remediation-plan.md`.
+Plan focus: accepted/no-action scope freeze plus remediation of review-feedback findings via fail-fast validation and regression tests.
+Architecture/stack in scope: mode-based review completion (not scheduler-presence based), strict judge contract handling, config load-time fail-closed checks, Go + YAML validation + JSON decode + schema generator + Task.
 <!-- do not edit: plan resolution logic is ralph runtime machinery -->
 Resolve the implementation plan file as follows:
 1. Read `.ralph/prd.json`.
@@ -24,37 +25,33 @@ Resolve the implementation plan file as follows:
 
 ## Rules
 
-- Follow `AGENTS.md` (project policy) and this plan's task-local file boundaries.
-- Edit only files listed in the selected task's `Files` section unless a minimal same-scope helper/test adjustment is required for compilation or contract consistency.
-- Keep business logic in `internal/*`; CLI surface changes in `main.go` and `cmd/ralph/*`; schema work in `internal/config/schema` and `schemas/config.schema.json`; scaffold/template work in `internal/init/*` and related `README*.md` only when the task requires it.
-- Treat design and planning artifacts (`docs/plans/*`, `docs/adr/*`) as reference-only unless the selected story explicitly requires documentation updates.
-- Implement exactly ONE story per turn.
-- Use TDD (`RED -> GREEN -> REFACTOR`).
-- RED must compile and run: a compilation error is not RED. Add minimal scaffolding so the test executes and fails at runtime (for example, a failing assertion or an intentional unimplemented path).
-- Write idiomatic Go with small functions and wrap errors with context (`fmt.Errorf("...: %w", err)`).
-- Keep external config keys in snake_case YAML tags and preserve required lint annotations.
-- For typed runtime/validation errors, implement both `Code() string` and `ExitCode() int`.
-- Reuse existing runner/condition semantics (`success()`, `failure()`, `always()`, `changed()`, `on_fail`) rather than inventing new behavior.
-- Tests must stay in the changed domain package, prefer table-driven tests for branching behavior, and keep tests parallel-safe (`t.Parallel()`).
+- Follow `AGENTS.md` and the selected task's `Files` list as the primary scope boundary.
+- Implement exactly ONE story per turn with strict TDD (`RED -> GREEN -> REFACTOR`); RED must be executable test failure, never compile/import failure.
 - Use the `execute-plan` skill to implement each story. When the Turn Procedure says 'Implement exactly that one story with TDD', invoke `execute-plan` with the corresponding task ID from the plan.
-- When tool/sandbox constraints require repository-local output paths via environment variables, keep unintended generated artifacts out of commits.
-- If such artifacts are under the repository and not ignored yet, add ignore rules (`.gitignore` for team-shared noise, `.git/info/exclude` for machine-local noise) in the same turn.
-- Remove transient artifacts that should not persist after commands finish.
+- Keep edits in the planned domains: `internal/runner/*`, `internal/config/*`, `internal/config/schema/*`, `schemas/config.schema.json`, `cmd/ralph/*_test.go`, `main_test.go`, `internal/init/*`, `README.md`, and docs (`docs/plans/*`, `docs/adr/*`) only when the selected task requires them.
+- Do not expand scope beyond findings remediation. Accepted/no-action items are fixed boundaries: keep run_id timestamp granularity unchanged and do not force init quality-gate step insertion.
+- Write idiomatic Go with small functions and wrapped errors (`fmt.Errorf("...: %w", err)`).
+- Keep YAML keys snake_case and preserve required lint annotations.
+- For typed runtime/validation errors, implement both `Code() string` and `ExitCode() int`.
+- Reuse existing runner/condition semantics (`success()`, `failure()`, `always()`, `changed()`, `on_fail`) and respect explicit role override behavior.
+- Add tests in the changed package, prefer table-driven cases for branching behavior, and keep tests parallel-safe (`t.Parallel()`).
+- Fix root causes; do not suppress errors or bypass failing gates.
 - Do NOT run `git commit`. Write only the commit message text to `.ralph/.commit-msg`.
-- Keep changes scoped to the selected story. Do not start another story in the same turn.
+- Keep changes scoped to the selected story and do not start another story in the same turn.
 
 ## Quality Gates
 
 Run required quality gates before finishing the turn.
 - Run the selected task's DoD command exactly as written in the plan:
-- `task-1`: `go test ./internal/config/... && task schema && git diff --exit-code -- schemas/config.schema.json`
-- `task-2`: `go test ./... -run 'TestRunParsesReviewCommand|TestReviewUsesSharedConfigPath|TestReviewRejectsUnsupportedStrategy'`
-- `task-3`: `go test ./internal/runner -run 'TestRunUsesPromptRunPath|TestReviewRequiresPromptFiles|TestRoleCommandFallback|TestRunTailMatchCompatibility'`
-- `task-4`: `go test ./internal/runner -run 'TestReviewSchedulerRules|TestReviewSchedulerMaxReviewsBoundary|TestReviewRunIDFormatAndArtifactNaming'`
-- `task-5`: `go test ./internal/runner -run 'TestJudgeContractValidation|TestReviewConvergenceStableRounds|TestReviewNonConvergenceReturns23|TestReviewLogsRemainFreeForm'`
-- `task-6`: `go test ./internal/runner -run 'TestDryRunRunProfileOutput|TestDryRunReviewProfileOutput'`
-- `task-7`: `go test ./internal/init -run 'TestScaffoldCreatesReviewPromptSet|TestScaffoldOmitsLegacyPromptAndReviewsDir|TestScaffoldConfigIncludesRunAndReviewProfiles'`
-- Run repository-level quality gates from `AGENTS.md`: `task fmt`, `task lint`, `task test` (and `task schema` whenever config/schema changes).
+- `task-1`: `rg -n "accepted risk|no-action|remediation scope|Findings Baseline" docs/plans/2026-02-25-review-convergence-design.md docs/adr/0004-review-convergence-mode.md docs/plans/2026-02-25-review-feedback-remediation-plan.md`
+- `task-2`: `go test ./internal/runner -run 'TestReviewExplicitRoleUsesReviewCompletion|TestReviewJudgeNonZeroDoesNotConverge'`
+- `task-3`: `go test ./internal/config -run 'TestLoadBytesAppliesReviewConvergencePartialDefaults|TestLoadBytesReviewConvergenceSingleFieldOverrides'`
+- `task-4`: `go test ./internal/runner -run 'TestJudgeContractRejectsUnknownFields|TestJudgeContractRejectsNegativeNewFindings'`
+- `task-5`: `go test ./internal/config/... ./internal/config/schema/... && task schema && git diff --exit-code -- schemas/config.schema.json`
+- `task-6`: `go test ./internal/runner -run 'TestRunRequiresNonEmptyPromptRun|TestReviewRequiresNonEmptyPromptFiles'`
+- `task-7`: `go test ./internal/config ./internal/runner -run 'TestLoadBytesAppliesReviewConvergencePartialDefaults|TestReviewSchedulerRespectsMinReviewsBeforeJudge|TestReviewStableCountResetsOnUnstableJudge'`
+- `task-8`: `go test ./internal/config/... ./cmd/ralph/... ./internal/init/... && rg -n "default when omitted|scaffold sample" README.md`
+- Run repository-level gates from `AGENTS.md` as applicable: `task fmt`, `task lint`, `task test`, `task build` (and `task schema` whenever config/schema changes).
 - Format, lint, and tests must all pass before writing `.ralph/.commit-msg`.
 - Verify `git status --short` contains only intended story changes before finishing.
 - Fix root causes; do not bypass warnings or relax checks.

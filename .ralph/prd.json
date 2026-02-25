@@ -1,61 +1,70 @@
 {
   "project": "ralph",
-  "plan": "docs/plans/2026-02-25-review-convergence-plan.md",
+  "plan": "docs/plans/2026-02-25-review-feedback-remediation-plan.md",
   "branchName": "feat/review-convergence-workflow",
   "stories": [
     {
       "id": "task-1",
-      "title": "Refactor config model to command profiles",
+      "title": "Scope Freeze and Design Record Sync",
       "deps": [],
-      "passes": true
+      "passes": false
     },
     {
       "id": "task-2",
-      "title": "Add `ralph review` command surface with shared config loading",
+      "title": "Fix Review Completion Routing for Explicit Roles",
       "deps": [
         "task-1"
       ],
-      "passes": true
+      "passes": false
     },
     {
       "id": "task-3",
-      "title": "Introduce mode/role command and prompt resolution in runner",
+      "title": "Fix Partial Defaulting in `review_convergence`",
       "deps": [
-        "task-2"
+        "task-1"
       ],
-      "passes": true
+      "passes": false
     },
     {
       "id": "task-4",
-      "title": "Implement review scheduler state and artifact lifecycle",
-      "deps": [
-        "task-3"
-      ],
-      "passes": true
-    },
-    {
-      "id": "task-5",
-      "title": "Enforce judge JSON contract and convergence completion semantics",
-      "deps": [
-        "task-4"
-      ],
-      "passes": true
-    },
-    {
-      "id": "task-6",
-      "title": "Extend dry-run output for run/review profiles",
-      "deps": [
-        "task-5"
-      ],
-      "passes": true
-    },
-    {
-      "id": "task-7",
-      "title": "Update `ralph init` scaffolding for review convergence defaults",
+      "title": "Enforce Strict Judge JSON Contract",
       "deps": [
         "task-2"
       ],
-      "passes": true
+      "passes": false
+    },
+    {
+      "id": "task-5",
+      "title": "Validate `completion.run.tail_lines` at Load Time",
+      "deps": [
+        "task-3"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-6",
+      "title": "Add Prompt Empty-File Regression Coverage",
+      "deps": [
+        "task-1"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-7",
+      "title": "Expand Review-Convergence Boundary Coverage",
+      "deps": [
+        "task-3"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-8",
+      "title": "Close Remaining Coverage and Documentation Gaps",
+      "deps": [
+        "task-4",
+        "task-5"
+      ],
+      "passes": false
     }
   ]
 }
