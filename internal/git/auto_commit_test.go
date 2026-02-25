@@ -13,7 +13,7 @@ import (
 	ralphprd "github.com/shuymn/ralph/internal/prd"
 )
 
-func TestAutoCommitSplitStagesRalphBeforeNonRalph(t *testing.T) {
+func TestAutoCommitSplitStagesNonRalphBeforeRalph(t *testing.T) {
 	t.Parallel()
 
 	workspace := t.TempDir()
@@ -32,14 +32,9 @@ func TestAutoCommitSplitStagesRalphBeforeNonRalph(t *testing.T) {
 	writeFile(t, commitMsgPath, "feat: implement task\n\nbody\n")
 
 	diffCached := []string{"diff", "--cached", "--quiet", "--exit-code"}
+	diffCommitMsg := []string{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"}
 
 	runner := newQueuedRunner()
-	runner.enqueue([]string{"add", "-A", ".ralph/"}, ralphgit.CommandResult{ExitCode: 0})
-	runner.enqueue(diffCached, ralphgit.CommandResult{ExitCode: 1})
-	runner.enqueue(
-		[]string{"commit", "-m", "chore(ralph): mark TASK-1 complete in PRD and progress"},
-		ralphgit.CommandResult{ExitCode: 0},
-	)
 	runner.enqueue([]string{"add", "-A"}, ralphgit.CommandResult{ExitCode: 0})
 	runner.enqueue(
 		[]string{"restore", "--staged", ".ralph/"},
@@ -48,6 +43,20 @@ func TestAutoCommitSplitStagesRalphBeforeNonRalph(t *testing.T) {
 	runner.enqueue(diffCached, ralphgit.CommandResult{ExitCode: 1})
 	runner.enqueue(
 		[]string{"commit", "-F", commitMsgPath},
+		ralphgit.CommandResult{ExitCode: 0},
+	)
+	runner.enqueue([]string{"add", "-A", ".ralph/"}, ralphgit.CommandResult{ExitCode: 0})
+	runner.enqueue(diffCommitMsg, ralphgit.CommandResult{
+		ExitCode: 0,
+		Stdout:   ".ralph/.commit-msg\n",
+	})
+	runner.enqueue(
+		[]string{"restore", "--staged", ".ralph/.commit-msg"},
+		ralphgit.CommandResult{ExitCode: 0},
+	)
+	runner.enqueue(diffCached, ralphgit.CommandResult{ExitCode: 1})
+	runner.enqueue(
+		[]string{"commit", "-m", "chore(ralph): mark TASK-1 complete in PRD and progress"},
 		ralphgit.CommandResult{ExitCode: 0},
 	)
 
@@ -66,14 +75,19 @@ func TestAutoCommitSplitStagesRalphBeforeNonRalph(t *testing.T) {
 	}
 
 	assertCalls(t, runner.calls, workspace, [][]string{
-		{"add", "-A", ".ralph/"},
-		{"diff", "--cached", "--quiet", "--exit-code"},
-		{"commit", "-m", "chore(ralph): mark TASK-1 complete in PRD and progress"},
 		{"add", "-A"},
 		{"restore", "--staged", ".ralph/"},
 		{"diff", "--cached", "--quiet", "--exit-code"},
 		{"commit", "-F", commitMsgPath},
+		{"add", "-A", ".ralph/"},
+		{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
+		{"restore", "--staged", ".ralph/.commit-msg"},
+		{"diff", "--cached", "--quiet", "--exit-code"},
+		{"commit", "-m", "chore(ralph): mark TASK-1 complete in PRD and progress"},
 	})
+	if _, err := os.Stat(commitMsgPath); !os.IsNotExist(err) {
+		t.Fatalf("expected .commit-msg to be removed, got err=%v", err)
+	}
 	runner.assertNoPending(t)
 }
 
@@ -89,9 +103,18 @@ func TestAutoCommitTogetherStagesAllFiles(t *testing.T) {
 	writeFile(t, commitMsgPath, "feat: from file\n\nbody\n")
 
 	diffCached := []string{"diff", "--cached", "--quiet", "--exit-code"}
+	diffCommitMsg := []string{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"}
 
 	runner := newQueuedRunner()
 	runner.enqueue([]string{"add", "-A"}, ralphgit.CommandResult{ExitCode: 0})
+	runner.enqueue(diffCommitMsg, ralphgit.CommandResult{
+		ExitCode: 0,
+		Stdout:   ".ralph/.commit-msg\n",
+	})
+	runner.enqueue(
+		[]string{"restore", "--staged", ".ralph/.commit-msg"},
+		ralphgit.CommandResult{ExitCode: 0},
+	)
 	runner.enqueue(diffCached, ralphgit.CommandResult{ExitCode: 1})
 	runner.enqueue(
 		[]string{"commit", "-F", commitMsgPath},
@@ -112,9 +135,14 @@ func TestAutoCommitTogetherStagesAllFiles(t *testing.T) {
 
 	assertCalls(t, runner.calls, workspace, [][]string{
 		{"add", "-A"},
+		{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
+		{"restore", "--staged", ".ralph/.commit-msg"},
 		{"diff", "--cached", "--quiet", "--exit-code"},
 		{"commit", "-F", commitMsgPath},
 	})
+	if _, err := os.Stat(commitMsgPath); !os.IsNotExist(err) {
+		t.Fatalf("expected .commit-msg to be removed, got err=%v", err)
+	}
 	runner.assertNoPending(t)
 }
 
@@ -152,7 +180,23 @@ func TestAutoCommitSplitRequiresExactlyOneTaskIDTransition(t *testing.T) {
 			writeFile(t, prdPath, tc.afterPRD)
 
 			runner := newQueuedRunner()
-			runner.enqueue([]string{"add", "-A", ".ralph/"}, ralphgit.CommandResult{ExitCode: 0})
+			runner.enqueue([]string{"add", "-A"}, ralphgit.CommandResult{ExitCode: 0})
+			runner.enqueue(
+				[]string{"restore", "--staged", ".ralph/"},
+				ralphgit.CommandResult{ExitCode: 0},
+			)
+			runner.enqueue(
+				[]string{"diff", "--cached", "--quiet", "--exit-code"},
+				ralphgit.CommandResult{ExitCode: 0},
+			)
+			runner.enqueue(
+				[]string{"add", "-A", ".ralph/"},
+				ralphgit.CommandResult{ExitCode: 0},
+			)
+			runner.enqueue(
+				[]string{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
+				ralphgit.CommandResult{ExitCode: 0},
+			)
 			runner.enqueue(
 				[]string{"diff", "--cached", "--quiet", "--exit-code"},
 				ralphgit.CommandResult{ExitCode: 1},
@@ -178,7 +222,11 @@ func TestAutoCommitSplitRequiresExactlyOneTaskIDTransition(t *testing.T) {
 			}
 
 			assertCalls(t, runner.calls, workspace, [][]string{
+				{"add", "-A"},
+				{"restore", "--staged", ".ralph/"},
+				{"diff", "--cached", "--quiet", "--exit-code"},
 				{"add", "-A", ".ralph/"},
+				{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
 				{"diff", "--cached", "--quiet", "--exit-code"},
 			})
 			runner.assertNoPending(t)
@@ -194,14 +242,21 @@ func TestAutoCommitNoopWhenStagedDiffIsEmpty(t *testing.T) {
 
 		workspace := t.TempDir()
 		runner := newQueuedRunner()
-		runner.enqueue([]string{"add", "-A", ".ralph/"}, ralphgit.CommandResult{ExitCode: 0})
+		runner.enqueue([]string{"add", "-A"}, ralphgit.CommandResult{ExitCode: 0})
+		runner.enqueue(
+			[]string{"restore", "--staged", ".ralph/"},
+			ralphgit.CommandResult{ExitCode: 0},
+		)
 		runner.enqueue(
 			[]string{"diff", "--cached", "--quiet", "--exit-code"},
 			ralphgit.CommandResult{ExitCode: 0},
 		)
-		runner.enqueue([]string{"add", "-A"}, ralphgit.CommandResult{ExitCode: 0})
 		runner.enqueue(
-			[]string{"restore", "--staged", ".ralph/"},
+			[]string{"add", "-A", ".ralph/"},
+			ralphgit.CommandResult{ExitCode: 0},
+		)
+		runner.enqueue(
+			[]string{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
 			ralphgit.CommandResult{ExitCode: 0},
 		)
 		runner.enqueue(
@@ -224,10 +279,11 @@ func TestAutoCommitNoopWhenStagedDiffIsEmpty(t *testing.T) {
 		}
 
 		assertCalls(t, runner.calls, workspace, [][]string{
-			{"add", "-A", ".ralph/"},
-			{"diff", "--cached", "--quiet", "--exit-code"},
 			{"add", "-A"},
 			{"restore", "--staged", ".ralph/"},
+			{"diff", "--cached", "--quiet", "--exit-code"},
+			{"add", "-A", ".ralph/"},
+			{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
 			{"diff", "--cached", "--quiet", "--exit-code"},
 		})
 		runner.assertNoPending(t)
@@ -239,6 +295,10 @@ func TestAutoCommitNoopWhenStagedDiffIsEmpty(t *testing.T) {
 		workspace := t.TempDir()
 		runner := newQueuedRunner()
 		runner.enqueue([]string{"add", "-A"}, ralphgit.CommandResult{ExitCode: 0})
+		runner.enqueue(
+			[]string{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
+			ralphgit.CommandResult{ExitCode: 0},
+		)
 		runner.enqueue(
 			[]string{"diff", "--cached", "--quiet", "--exit-code"},
 			ralphgit.CommandResult{ExitCode: 0},
@@ -258,6 +318,7 @@ func TestAutoCommitNoopWhenStagedDiffIsEmpty(t *testing.T) {
 
 		assertCalls(t, runner.calls, workspace, [][]string{
 			{"add", "-A"},
+			{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
 			{"diff", "--cached", "--quiet", "--exit-code"},
 		})
 		runner.assertNoPending(t)
@@ -294,6 +355,19 @@ func TestAutoCommitUsesFallbackWhenCommitMsgIsEmpty(t *testing.T) {
 			runner := newQueuedRunner()
 			runner.enqueue([]string{"add", "-A"}, ralphgit.CommandResult{ExitCode: 0})
 			runner.enqueue(
+				[]string{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
+				ralphgit.CommandResult{
+					ExitCode: 0,
+					Stdout:   map[bool]string{true: ".ralph/.commit-msg\n", false: ""}[tc.writeMessage],
+				},
+			)
+			if tc.writeMessage {
+				runner.enqueue(
+					[]string{"restore", "--staged", ".ralph/.commit-msg"},
+					ralphgit.CommandResult{ExitCode: 0},
+				)
+			}
+			runner.enqueue(
 				[]string{"diff", "--cached", "--quiet", "--exit-code"},
 				ralphgit.CommandResult{ExitCode: 1},
 			)
@@ -314,11 +388,23 @@ func TestAutoCommitUsesFallbackWhenCommitMsgIsEmpty(t *testing.T) {
 				t.Fatalf("auto commit failed: %v", err)
 			}
 
-			assertCalls(t, runner.calls, workspace, [][]string{
+			expected := [][]string{
 				{"add", "-A"},
-				{"diff", "--cached", "--quiet", "--exit-code"},
-				{"commit", "-m", fallback},
-			})
+				{"diff", "--cached", "--name-only", "--", ".ralph/.commit-msg"},
+			}
+			if tc.writeMessage {
+				expected = append(expected, []string{"restore", "--staged", ".ralph/.commit-msg"})
+			}
+			expected = append(expected,
+				[]string{"diff", "--cached", "--quiet", "--exit-code"},
+				[]string{"commit", "-m", fallback},
+			)
+			assertCalls(t, runner.calls, workspace, expected)
+			if tc.writeMessage {
+				if _, statErr := os.Stat(commitMsgPath); !os.IsNotExist(statErr) {
+					t.Fatalf("expected .commit-msg to be removed, got err=%v", statErr)
+				}
+			}
 			runner.assertNoPending(t)
 		})
 	}
