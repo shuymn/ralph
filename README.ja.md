@@ -1,7 +1,7 @@
 # ralph
 
 `ralph` は、`.ralph/config.yml` を SoT としてタスクループを実行する Go 製 CLI です。  
-`ralph init` で雛形を作り、`ralph run` で `pre -> main -> post` の 3 phase を繰り返し実行します。
+`ralph init` で雛形を作り、`ralph run` または `ralph review` でループを実行します。
 
 [English README](README.md)
 
@@ -9,18 +9,20 @@
 
 - `.ralph/config.yml` を読み込んで runner を構成
 - `.ralph/prd.json` の `branchName` を必須とし、`run` 開始時に対象ブランチへ `git switch`（未存在なら作成）
-- `main` phase では `agent.command` を `sh -c` で実行し、`.ralph/prompt.md` を stdin で渡す
-- `post` phase で `uses: auto_commit` を使った自動コミットが可能
+- `run` mode では `agent.run_command` を `sh -c` で実行し、`.ralph/prompt.run.md` を stdin で渡す
+- `review` mode では `review`/`judge` role を自動スケジュールし、`.ralph/prompt.review.md` と `.ralph/prompt.judge.md` を使う
+- `phases.pre` / `phases.post` は `run` mode のみ適用される（`review` mode では無視される）
+- `post` phase（`run` modeのみ）で `uses: auto_commit` を使った自動コミットが可能
 - 完了条件:
-  - `.ralph/prd.json` の全 `stories[].passes` が `true`
-  - agent 出力末尾 `completion.tail_lines` 行の中に `completion.signal` と完全一致する行がある
+  - `run`: `completion.run.signal` を `completion.run.tail_lines` で tail-match 判定
+  - `review`: `completion.review.review_convergence` と judge JSON 契約で収斂判定
 
 ## 前提
 
 - Go (`go.mod`: `go 1.25.0`)
 - `git`
 - `sh` (POSIX shell)
-- `agent.command` で指定するエージェント CLI（例: `claude`, `codex` など）
+- `agent.run_command` で指定するエージェント CLI（例: `claude`, `codex` など）
 
 ## インストール
 
@@ -39,14 +41,16 @@ ralph init
 `ralph init` は以下を作成します（既存ファイルは上書きせず skip）。
 
 - `.ralph/config.yml`
-- `.ralph/prompt.md`
+- `.ralph/prompt.run.md`
+- `.ralph/prompt.review.md`
+- `.ralph/prompt.judge.md`
 - `.ralph/prd.json`
 - `.ralph/progress.md`
 
 ## 最短実行手順
 
 1. `.ralph/prd.json` を更新する（`branchName` と story 内容を実プロジェクト向けに置換）
-2. `.ralph/config.yml` の `agent.command` を実環境のコマンドに合わせる
+2. `.ralph/config.yml` の `agent.run_command` を実環境のコマンドに合わせる
 3. dry-run で実行計画を確認する
 
 ```bash
@@ -85,7 +89,21 @@ ralph run
 version: "1"
 
 agent:
-  command: "claude -p --dangerously-skip-permissions"
+  run_command: "claude -p --dangerously-skip-permissions"
+
+completion:
+  run:
+    strategy: tail_match
+    signal: "<promise>COMPLETE</promise>"
+    tail_lines: 20
+  review:
+    strategy: review_convergence
+    signal: "<promise>COMPLETE</promise>"
+    review_convergence:
+      min_reviews: 3
+      max_reviews: 10
+      judge_every: 2
+      stable_rounds: 2
 
 git:
   commit: split
@@ -107,9 +125,15 @@ phases:
 
 - `agent.max_iterations`: `60`
 - `agent.sleep_seconds`: `5`
-- `completion.strategy`: `tail_match`
-- `completion.signal`: `<promise>COMPLETE</promise>`
-- `completion.tail_lines`: `20`
+- `completion.run.strategy`: `tail_match`
+- `completion.run.signal`: `<promise>COMPLETE</promise>`
+- `completion.run.tail_lines`: `20`
+- `completion.review.strategy`: `review_convergence`
+- `completion.review.signal`: `<promise>COMPLETE</promise>`
+- `completion.review.review_convergence.min_reviews`: `3`
+- `completion.review.review_convergence.max_reviews`: `10`
+- `completion.review.review_convergence.judge_every`: `2`
+- `completion.review.review_convergence.stable_rounds`: `2`
 - `git.commit`: `split`
 - `git.fallback_message`: `feat: implement task (auto-commit)`
 - `git.fallback_no_gpg_sign`: `false`

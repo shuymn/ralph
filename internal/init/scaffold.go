@@ -23,8 +23,14 @@ const (
 //go:embed templates/config.tmpl
 var configTemplate string
 
-//go:embed templates/prompt.tmpl
-var promptTemplate string
+//go:embed templates/prompt.run.tmpl
+var promptRunTemplate string
+
+//go:embed templates/prompt.review.tmpl
+var promptReviewTemplate string
+
+//go:embed templates/prompt.judge.tmpl
+var promptJudgeTemplate string
 
 //go:embed templates/prd.tmpl
 var prdTemplate string
@@ -58,7 +64,9 @@ func Scaffold(root string, now time.Time, stderr io.Writer) error {
 
 	specs := []templateSpec{
 		{name: "config", filename: "config.yml", body: configTemplate},
-		{name: "prompt", filename: "prompt.md", body: promptTemplate},
+		{name: "prompt_run", filename: "prompt.run.md", body: promptRunTemplate},
+		{name: "prompt_review", filename: "prompt.review.md", body: promptReviewTemplate},
+		{name: "prompt_judge", filename: "prompt.judge.md", body: promptJudgeTemplate},
 		{name: "prd", filename: "prd.json", body: prdTemplate},
 		{name: "progress", filename: "progress.md", body: progressTemplate},
 	}

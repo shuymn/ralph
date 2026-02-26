@@ -12,12 +12,12 @@ import (
 	ralphprd "github.com/shuymn/ralph/internal/prd"
 )
 
-var errInvalidCompletionTailLines = errors.New("completion.tail_lines must be > 0")
+var errInvalidCompletionTailLines = errors.New("completion.run.tail_lines must be > 0")
 
 func evaluateCompletion(
 	outputPath string,
 	doc ralphprd.Document,
-	completionCfg ralphconfig.Completion,
+	completionCfg ralphconfig.RunCompletionProfile,
 ) (bool, bool, error) {
 	allPassed := true
 	for _, story := range doc.Stories {

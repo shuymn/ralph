@@ -6,9 +6,15 @@ const (
 	DefaultAgentMaxIterations = 60
 	DefaultAgentSleepSeconds  = 5
 
-	DefaultCompletionStrategy  = "tail_match"
-	DefaultCompletionSignal    = "<promise>COMPLETE</promise>"
-	DefaultCompletionTailLines = 20
+	DefaultRunCompletionStrategy    = "tail_match"
+	DefaultReviewCompletionStrategy = "review_convergence"
+	DefaultCompletionSignal         = "<promise>COMPLETE</promise>"
+	DefaultRunCompletionTailLines   = 20
+
+	DefaultReviewMinReviews   = 3
+	DefaultReviewMaxReviews   = 10
+	DefaultReviewJudgeEvery   = 2
+	DefaultReviewStableRounds = 2
 
 	DefaultGitCommitMode  = "split"
 	DefaultFallbackCommit = "feat: implement task (auto-commit)"
@@ -26,15 +32,41 @@ type Config struct {
 }
 
 type Agent struct {
-	Command       string `json:"command"                  yaml:"command"`
+	RunCommand    string `json:"run_command"              yaml:"run_command"`    //nolint:tagliatelle // External schema key uses snake_case.
+	ReviewCommand string `json:"review_command,omitempty" yaml:"review_command"` //nolint:tagliatelle // External schema key uses snake_case.
+	JudgeCommand  string `json:"judge_command,omitempty"  yaml:"judge_command"`  //nolint:tagliatelle // External schema key uses snake_case.
 	MaxIterations int    `json:"max_iterations,omitempty" yaml:"max_iterations"` //nolint:tagliatelle // External schema key uses snake_case.
 	SleepSeconds  int    `json:"sleep_seconds,omitempty"  yaml:"sleep_seconds"`  //nolint:tagliatelle // External schema key uses snake_case.
 }
 
 type Completion struct {
-	Strategy  string `json:"strategy,omitempty"   yaml:"strategy"`
-	Signal    string `json:"signal,omitempty"     yaml:"signal"`
-	TailLines int    `json:"tail_lines,omitempty" yaml:"tail_lines"` //nolint:tagliatelle // External schema key uses snake_case.
+	Run    RunCompletionProfile    `json:"run,omitzero"    yaml:"run"`
+	Review ReviewCompletionProfile `json:"review,omitzero" yaml:"review"`
+}
+
+type RunCompletionProfile struct {
+	Strategy          string `json:"strategy,omitempty"   yaml:"strategy"`
+	Signal            string `json:"signal,omitempty"     yaml:"signal"`
+	TailLines         int    `json:"tail_lines,omitempty" yaml:"tail_lines"` //nolint:tagliatelle // External schema key uses snake_case.
+	tailLinesExplicit bool   `json:"-"                    yaml:"-"`
+}
+
+type ReviewCompletionProfile struct {
+	Strategy          string                `json:"strategy,omitempty"          yaml:"strategy"`
+	Signal            string                `json:"signal,omitempty"            yaml:"signal"`
+	ReviewConvergence ReviewConvergenceMode `json:"review_convergence,omitzero" yaml:"review_convergence"` //nolint:tagliatelle // External schema key uses snake_case.
+}
+
+type ReviewConvergenceMode struct {
+	MinReviews   int `json:"min_reviews,omitempty"   yaml:"min_reviews"`   //nolint:tagliatelle // External schema key uses snake_case.
+	MaxReviews   int `json:"max_reviews,omitempty"   yaml:"max_reviews"`   //nolint:tagliatelle // External schema key uses snake_case.
+	JudgeEvery   int `json:"judge_every,omitempty"   yaml:"judge_every"`   //nolint:tagliatelle // External schema key uses snake_case.
+	StableRounds int `json:"stable_rounds,omitempty" yaml:"stable_rounds"` //nolint:tagliatelle // External schema key uses snake_case.
+
+	minReviewsExplicit   bool `json:"-" yaml:"-"`
+	maxReviewsExplicit   bool `json:"-" yaml:"-"`
+	judgeEveryExplicit   bool `json:"-" yaml:"-"`
+	stableRoundsExplicit bool `json:"-" yaml:"-"`
 }
 
 type Git struct {

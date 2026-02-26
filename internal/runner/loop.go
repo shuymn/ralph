@@ -27,12 +27,19 @@ const noExitCode = -1
 
 const (
 	ralphDirName          = ".ralph"
-	promptFileName        = "prompt.md"
+	promptRunFileName     = "prompt.run.md"
+	promptReviewFileName  = "prompt.review.md"
+	promptJudgeFileName   = "prompt.judge.md"
+	legacyPromptFileName  = "prompt.md"
 	prdFileName           = "prd.json"
 	commitMessageFileName = ".commit-msg"
 )
 
-var errUnsupportedUsesStep = errors.New("unsupported uses step")
+var (
+	errUnsupportedUsesStep      = errors.New("unsupported uses step")
+	errJudgeArtifactPathMissing = errors.New("judge artifact path must not be empty")
+	errJudgeCommandFailed       = errors.New("judge command failed")
+)
 
 type Options struct {
 	WorkingDir string
@@ -40,10 +47,30 @@ type Options struct {
 	Stderr     io.Writer
 	TempDir    string
 	Sleep      func(time.Duration)
+	Mode       Mode
+	Role       Role
 }
+
+type Mode string
+
+const (
+	ModeRun    Mode = "run"
+	ModeReview Mode = "review"
+)
+
+type Role string
+
+const (
+	RoleRun    Role = "run"
+	RoleReview Role = "review"
+	RoleJudge  Role = "judge"
+)
 
 type fixedPaths struct {
 	Prompt        string
+	PromptRun     string
+	PromptReview  string
+	PromptJudge   string
 	PRD           string
 	CommitMessage string
 }
@@ -59,6 +86,13 @@ type phaseResult struct {
 	reason   string
 }
 
+type reviewRuntime struct {
+	state      reviewState
+	config     ralphconfig.ReviewConvergenceMode
+	artifacts  reviewArtifacts
+	completion reviewCompletion
+}
+
 func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 	if ctx == nil {
 		ctx = context.Background()
@@ -66,6 +100,22 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 	opts = normalizeOptions(opts)
 	plan := buildRunPlan(cfg, opts.WorkingDir)
 	paths := plan.Paths
+	modePlan, err := resolveModePlan(cfg, paths, opts.Mode, opts.Role)
+	if err != nil {
+		logRuntimeError(opts.Stderr, err)
+		return ExitCodeRuntime
+	}
+	reviewMode := modePlan.Mode == ModeReview
+	var reviewRuntimeState *reviewRuntime
+	enableReviewScheduler := reviewMode && strings.TrimSpace(string(opts.Role)) == ""
+	if reviewMode {
+		runtime := newReviewRuntime(
+			paths,
+			cfg.Completion.Review,
+			time.Now(),
+		)
+		reviewRuntimeState = &runtime
+	}
 	autoCommitBase := ralphgit.Options{
 		WorkingDir:        opts.WorkingDir,
 		Mode:              plan.Git.Commit,
@@ -102,55 +152,111 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			logRuntimeError(opts.Stderr, err)
 			return ExitCodeRuntime
 		}
+		iterationPlan := modePlan
+		if enableReviewScheduler {
+			scheduledRole := nextReviewRole(
+				reviewRuntimeState.state,
+				reviewRuntimeState.config,
+			)
+			iterationPlan, err = resolveModePlan(
+				cfg,
+				paths,
+				ModeReview,
+				scheduledRole,
+			)
+			if err != nil {
+				logRuntimeError(opts.Stderr, err)
+				return ExitCodeRuntime
+			}
+		}
+
 		autoCommitOpts := autoCommitBase
 		autoCommitOpts.BeforePRD = beforePRD
 
+		phasesEnabled := iterationPlan.Mode == ModeRun
 		changedFunc := ralphcondition.NewGitChangedFunc(opts.WorkingDir)
 
-		preResult, err := runPhase(
-			ctx,
-			plan.PreSteps,
-			&phaseState{success: true, failure: false},
-			changedFunc,
-			autoCommitOpts,
-			opts,
+		if phasesEnabled {
+			preResult, err := runPhase(
+				ctx,
+				plan.PreSteps,
+				&phaseState{success: true, failure: false},
+				changedFunc,
+				autoCommitOpts,
+				opts,
+			)
+			if err != nil {
+				logRuntimeError(opts.Stderr, err)
+				return ExitCodeRuntime
+			}
+			if preResult.stopLoop {
+				logStopLoop(opts.Stderr, "pre", preResult.stepName, preResult.reason)
+				return ExitCodeStopLoop
+			}
+		}
+
+		mainResult, err := runMainStep(ctx, mainStepPlan{
+			Role:       iterationPlan.Role,
+			Command:    iterationPlan.Command,
+			PromptPath: iterationPlan.PromptPath,
+		}, opts, tracker)
+		if err != nil {
+			tracker.cleanup(mainResult.OutputPath)
+			logRuntimeError(opts.Stderr, err)
+			return ExitCodeRuntime
+		}
+		reviewArtifactPath := ""
+		if reviewRuntimeState != nil {
+			artifactPath, err := reviewRuntimeState.artifacts.nextPath(
+				iterationPlan.Role,
+				reviewRuntimeState.state,
+			)
+			if err != nil {
+				tracker.cleanup(mainResult.OutputPath)
+				logRuntimeError(opts.Stderr, err)
+				return ExitCodeRuntime
+			}
+			if err := reviewRuntimeState.artifacts.persist(
+				artifactPath,
+				mainResult.OutputPath,
+			); err != nil {
+				tracker.cleanup(mainResult.OutputPath)
+				logRuntimeError(opts.Stderr, err)
+				return ExitCodeRuntime
+			}
+			reviewArtifactPath = artifactPath
+			reviewRuntimeState.state.recordRole(iterationPlan.Role)
+		}
+
+		if phasesEnabled {
+			postResult, err := runPhase(
+				ctx,
+				plan.PostSteps,
+				&phaseState{success: mainResult.Success, failure: !mainResult.Success},
+				changedFunc,
+				autoCommitOpts,
+				opts,
+			)
+			if err != nil {
+				tracker.cleanup(mainResult.OutputPath)
+				logRuntimeError(opts.Stderr, err)
+				return ExitCodeRuntime
+			}
+			if postResult.stopLoop {
+				tracker.cleanup(mainResult.OutputPath)
+				logStopLoop(opts.Stderr, "post", postResult.stepName, postResult.reason)
+				return ExitCodeStopLoop
+			}
+		}
+
+		completionCode, err := completeModeIteration(
+			iterationPlan,
+			mainResult,
+			reviewArtifactPath,
+			reviewRuntimeState,
+			paths.PRD,
+			tracker,
 		)
-		if err != nil {
-			logRuntimeError(opts.Stderr, err)
-			return ExitCodeRuntime
-		}
-		if preResult.stopLoop {
-			logStopLoop(opts.Stderr, "pre", preResult.stepName, preResult.reason)
-			return ExitCodeStopLoop
-		}
-
-		mainResult, err := runMainStep(ctx, plan.Agent.Command, paths.Prompt, opts, tracker)
-		if err != nil {
-			tracker.cleanup(mainResult.OutputPath)
-			logRuntimeError(opts.Stderr, err)
-			return ExitCodeRuntime
-		}
-
-		postResult, err := runPhase(
-			ctx,
-			plan.PostSteps,
-			&phaseState{success: mainResult.Success, failure: !mainResult.Success},
-			changedFunc,
-			autoCommitOpts,
-			opts,
-		)
-		if err != nil {
-			tracker.cleanup(mainResult.OutputPath)
-			logRuntimeError(opts.Stderr, err)
-			return ExitCodeRuntime
-		}
-		if postResult.stopLoop {
-			tracker.cleanup(mainResult.OutputPath)
-			logStopLoop(opts.Stderr, "post", postResult.stepName, postResult.reason)
-			return ExitCodeStopLoop
-		}
-
-		completionCode, err := completeIteration(mainResult, paths.PRD, plan.Completion, tracker)
 		if err != nil {
 			logRuntimeError(opts.Stderr, err)
 			return ExitCodeRuntime
@@ -167,6 +273,20 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 	}
 
 	return ExitCodeMaxIterations
+}
+
+func newReviewRuntime(
+	paths fixedPaths,
+	profile ralphconfig.ReviewCompletionProfile,
+	now time.Time,
+) reviewRuntime {
+	state := newReviewState(now)
+	return reviewRuntime{
+		state:      state,
+		config:     profile.ReviewConvergence,
+		artifacts:  newReviewArtifacts(paths, state.runID),
+		completion: newReviewCompletion(profile),
+	}
 }
 
 func runPhase(
@@ -237,7 +357,10 @@ func runStep(
 func resolvePaths(workingDir string) fixedPaths {
 	base := filepath.Join(workingDir, ralphDirName)
 	return fixedPaths{
-		Prompt:        filepath.Join(base, promptFileName),
+		Prompt:        filepath.Join(base, legacyPromptFileName),
+		PromptRun:     filepath.Join(base, promptRunFileName),
+		PromptReview:  filepath.Join(base, promptReviewFileName),
+		PromptJudge:   filepath.Join(base, promptJudgeFileName),
 		PRD:           filepath.Join(base, prdFileName),
 		CommitMessage: filepath.Join(base, commitMessageFileName),
 	}
@@ -266,6 +389,9 @@ func normalizeOptions(opts Options) Options {
 	}
 	if opts.Stderr == nil {
 		opts.Stderr = os.Stderr
+	}
+	if strings.TrimSpace(string(opts.Mode)) == "" {
+		opts.Mode = ModeRun
 	}
 
 	return opts
@@ -298,7 +424,7 @@ func sleep(ctx context.Context, duration time.Duration, sleepFn func(time.Durati
 func completeIteration(
 	mainResult mainResult,
 	prdPath string,
-	completionCfg ralphconfig.Completion,
+	completionCfg ralphconfig.RunCompletionProfile,
 	tracker *tmpTracker,
 ) (int, error) {
 	defer tracker.cleanup(mainResult.OutputPath)
@@ -322,6 +448,68 @@ func completeIteration(
 	}
 	if mismatch {
 		return ExitCodeCompletionMismatch, nil
+	}
+
+	return noExitCode, nil
+}
+
+func completeModeIteration(
+	iterationPlan modePlan,
+	mainResult mainResult,
+	reviewArtifactPath string,
+	reviewRuntimeState *reviewRuntime,
+	prdPath string,
+	tracker *tmpTracker,
+) (int, error) {
+	if reviewRuntimeState != nil {
+		return completeReviewIteration(
+			iterationPlan.Role,
+			reviewArtifactPath,
+			mainResult,
+			reviewRuntimeState,
+			tracker,
+		)
+	}
+
+	return completeIteration(
+		mainResult,
+		prdPath,
+		iterationPlan.RunCompletion,
+		tracker,
+	)
+}
+
+func completeReviewIteration(
+	role Role,
+	artifactPath string,
+	mainResult mainResult,
+	runtime *reviewRuntime,
+	tracker *tmpTracker,
+) (int, error) {
+	defer tracker.cleanup(mainResult.OutputPath)
+
+	if role != RoleJudge {
+		return noExitCode, nil
+	}
+	if !mainResult.Success {
+		return noExitCode, errJudgeCommandFailed
+	}
+	if artifactPath == "" {
+		return noExitCode, errJudgeArtifactPathMissing
+	}
+
+	judgeResult, err := parseJudgeContract(artifactPath)
+	if err != nil {
+		return noExitCode, fmt.Errorf("parse judge contract: %w", err)
+	}
+	if err := runtime.completion.recordJudge(judgeResult); err != nil {
+		return noExitCode, fmt.Errorf("record judge contract: %w", err)
+	}
+	if runtime.completion.converged(runtime.state.reviewCount) {
+		return 0, nil
+	}
+	if runtime.completion.nonConvergedAtMax(runtime.state.reviewCount) {
+		return ExitCodeMaxIterations, nil
 	}
 
 	return noExitCode, nil

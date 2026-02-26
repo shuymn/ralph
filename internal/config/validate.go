@@ -12,6 +12,7 @@ const (
 
 	ErrCodeConfigParse       = "CONFIG_PARSE"
 	ErrCodeConfigVersion     = "CONFIG_VERSION"
+	ErrCodeConfigCompletion  = "CONFIG_COMPLETION"
 	ErrCodeConfigStepShape   = "CONFIG_STEP_SHAPE"
 	ErrCodeConfigStepName    = "CONFIG_STEP_NAME"
 	ErrCodeConfigUnsupported = "CONFIG_UNSUPPORTED_BUILTIN"
@@ -87,11 +88,17 @@ func Validate(cfg *Config) error {
 			fmt.Sprintf("version must be %q", SupportedVersion),
 		)
 	}
-	if strings.TrimSpace(cfg.Agent.Command) == "" {
-		return newValidationError(ErrCodeConfigParse, "agent.command is required")
+	cfg.Agent.RunCommand = strings.TrimSpace(cfg.Agent.RunCommand)
+	cfg.Agent.ReviewCommand = strings.TrimSpace(cfg.Agent.ReviewCommand)
+	cfg.Agent.JudgeCommand = strings.TrimSpace(cfg.Agent.JudgeCommand)
+	if cfg.Agent.RunCommand == "" {
+		return newValidationError(ErrCodeConfigParse, "agent.run_command is required")
 	}
 
 	applyDefaults(cfg)
+	if err := validateCompletion(cfg); err != nil {
+		return err
+	}
 
 	if cfg.Git.Commit != "split" && cfg.Git.Commit != "together" {
 		return newValidationError(
@@ -117,21 +124,97 @@ func applyDefaults(cfg *Config) {
 	if cfg.Agent.SleepSeconds == 0 {
 		cfg.Agent.SleepSeconds = DefaultAgentSleepSeconds
 	}
-	if strings.TrimSpace(cfg.Completion.Strategy) == "" {
-		cfg.Completion.Strategy = DefaultCompletionStrategy
+
+	cfg.Completion.Run.Strategy = strings.TrimSpace(cfg.Completion.Run.Strategy)
+	cfg.Completion.Run.Signal = strings.TrimSpace(cfg.Completion.Run.Signal)
+	cfg.Completion.Review.Strategy = strings.TrimSpace(cfg.Completion.Review.Strategy)
+	cfg.Completion.Review.Signal = strings.TrimSpace(cfg.Completion.Review.Signal)
+
+	if cfg.Completion.Run.Strategy == "" {
+		cfg.Completion.Run.Strategy = DefaultRunCompletionStrategy
 	}
-	if strings.TrimSpace(cfg.Completion.Signal) == "" {
-		cfg.Completion.Signal = DefaultCompletionSignal
+	if cfg.Completion.Run.Signal == "" {
+		cfg.Completion.Run.Signal = DefaultCompletionSignal
 	}
-	if cfg.Completion.TailLines == 0 {
-		cfg.Completion.TailLines = DefaultCompletionTailLines
+	if !cfg.Completion.Run.tailLinesExplicit && cfg.Completion.Run.TailLines == 0 {
+		cfg.Completion.Run.TailLines = DefaultRunCompletionTailLines
 	}
-	if strings.TrimSpace(cfg.Git.Commit) == "" {
+	if cfg.Completion.Review.Strategy == "" {
+		cfg.Completion.Review.Strategy = DefaultReviewCompletionStrategy
+	}
+	if cfg.Completion.Review.Signal == "" {
+		cfg.Completion.Review.Signal = DefaultCompletionSignal
+	}
+	review := &cfg.Completion.Review.ReviewConvergence
+	if !review.minReviewsExplicit && review.MinReviews == 0 {
+		review.MinReviews = DefaultReviewMinReviews
+	}
+	if !review.maxReviewsExplicit && review.MaxReviews == 0 {
+		review.MaxReviews = DefaultReviewMaxReviews
+	}
+	if !review.judgeEveryExplicit && review.JudgeEvery == 0 {
+		review.JudgeEvery = DefaultReviewJudgeEvery
+	}
+	if !review.stableRoundsExplicit && review.StableRounds == 0 {
+		review.StableRounds = DefaultReviewStableRounds
+	}
+
+	cfg.Git.Commit = strings.TrimSpace(cfg.Git.Commit)
+	if cfg.Git.Commit == "" {
 		cfg.Git.Commit = DefaultGitCommitMode
 	}
 	if strings.TrimSpace(cfg.Git.FallbackMessage) == "" {
 		cfg.Git.FallbackMessage = DefaultFallbackCommit
 	}
+}
+
+func validateCompletion(cfg *Config) error {
+	if cfg.Completion.Run.Strategy != DefaultRunCompletionStrategy {
+		return newValidationError(
+			ErrCodeConfigCompletion,
+			"completion.run.strategy must be "+DefaultRunCompletionStrategy,
+		)
+	}
+	if cfg.Completion.Review.Strategy != DefaultReviewCompletionStrategy {
+		return newValidationError(
+			ErrCodeConfigCompletion,
+			"completion.review.strategy must be "+DefaultReviewCompletionStrategy,
+		)
+	}
+	if cfg.Completion.Run.TailLines < 1 {
+		return newValidationError(
+			ErrCodeConfigCompletion,
+			"completion.run.tail_lines must be >= 1",
+		)
+	}
+
+	review := cfg.Completion.Review.ReviewConvergence
+	if review.MinReviews < 1 {
+		return newValidationError(
+			ErrCodeConfigCompletion,
+			"completion.review.review_convergence.min_reviews must be >= 1",
+		)
+	}
+	if review.MaxReviews < review.MinReviews {
+		return newValidationError(
+			ErrCodeConfigCompletion,
+			"completion.review.review_convergence.max_reviews must be >= min_reviews",
+		)
+	}
+	if review.JudgeEvery < 1 {
+		return newValidationError(
+			ErrCodeConfigCompletion,
+			"completion.review.review_convergence.judge_every must be >= 1",
+		)
+	}
+	if review.StableRounds < 1 {
+		return newValidationError(
+			ErrCodeConfigCompletion,
+			"completion.review.review_convergence.stable_rounds must be >= 1",
+		)
+	}
+
+	return nil
 }
 
 func validatePhase(phaseName string, phase *Phase) error {

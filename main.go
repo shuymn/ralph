@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	usage       = "usage: ralph <init|run [--dry-run]>"
+	usage       = "usage: ralph <init|run [--dry-run]|review [--dry-run]>"
 	exitOK      = 0
 	exitFailure = 1
 	exitUsage   = 2
@@ -47,32 +47,54 @@ func run(args []string) int {
 		}
 		return exitOK
 	case "run":
-		if len(args) > commandWithOptionalFlagArgs {
+		dryRun, ok := parseDryRun(args)
+		if !ok {
 			_, _ = fmt.Fprintln(os.Stderr, usage)
 			return exitUsage
 		}
-
-		dryRun := false
-		if len(args) == commandWithOptionalFlagArgs {
-			if args[1] != "--dry-run" {
-				_, _ = fmt.Fprintln(os.Stderr, usage)
-				return exitUsage
-			}
-			dryRun = true
+		return runLoop(".", "run", dryRun)
+	case "review":
+		dryRun, ok := parseDryRun(args)
+		if !ok {
+			_, _ = fmt.Fprintln(os.Stderr, usage)
+			return exitUsage
 		}
-		return runLoop(".", dryRun)
+		return runLoop(".", "review", dryRun)
 	default:
 		_, _ = fmt.Fprintln(os.Stderr, usage)
 		return exitUsage
 	}
 }
 
-func runLoop(root string, dryRun bool) int {
+func parseDryRun(args []string) (bool, bool) {
+	if len(args) > commandWithOptionalFlagArgs {
+		return false, false
+	}
+	if len(args) == commandWithOptionalFlagArgs {
+		if args[1] != "--dry-run" {
+			return false, false
+		}
+		return true, true
+	}
+	return false, true
+}
+
+func runLoop(root, command string, dryRun bool) int {
 	configPath := filepath.Join(root, ".ralph", "config.yml")
 	cfg, err := ralphconfig.Load(configPath)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "ralph run failed: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "ralph %s failed: %v\n", command, err)
 		return errorExitCode(err, exitFailure)
+	}
+	mode := resolveCommandMode(command)
+	if command == "review" &&
+		cfg.Completion.Review.Strategy != ralphconfig.DefaultReviewCompletionStrategy {
+		_, _ = fmt.Fprintf(
+			os.Stderr,
+			"ralph review failed: completion.review.strategy must be %s\n",
+			ralphconfig.DefaultReviewCompletionStrategy,
+		)
+		return ralphconfig.ExitCodeValidation
 	}
 
 	if dryRun {
@@ -80,6 +102,7 @@ func runLoop(root string, dryRun bool) int {
 			WorkingDir: root,
 			Stdout:     os.Stdout,
 			Stderr:     os.Stderr,
+			Mode:       mode,
 		})
 	}
 
@@ -90,7 +113,15 @@ func runLoop(root string, dryRun bool) int {
 		WorkingDir: root,
 		Stdout:     os.Stdout,
 		Stderr:     os.Stderr,
+		Mode:       mode,
 	})
+}
+
+func resolveCommandMode(command string) ralphrunner.Mode {
+	if command == "review" {
+		return ralphrunner.ModeReview
+	}
+	return ralphrunner.ModeRun
 }
 
 func errorExitCode(err error, fallback int) int {

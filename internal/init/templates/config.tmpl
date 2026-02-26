@@ -2,7 +2,21 @@
 version: "1"
 
 agent:
-  command: "claude -p --dangerously-skip-permissions"
+  run_command: "claude -p --dangerously-skip-permissions"
+
+completion:
+  run:
+    strategy: tail_match
+    signal: "<promise>COMPLETE</promise>"
+    tail_lines: 20
+  review:
+    strategy: review_convergence
+    signal: "<promise>COMPLETE</promise>"
+    review_convergence:
+      min_reviews: 3
+      max_reviews: 10
+      judge_every: 2
+      stable_rounds: 2
 
 git:
   commit: split

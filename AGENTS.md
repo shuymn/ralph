@@ -26,14 +26,17 @@
 ## Coding & Error-Handling Conventions
 - Write idiomatic Go, prefer small functions, and wrap errors with context (`fmt.Errorf("...: %w", err)`).
 - Keep external schema keys in snake_case YAML tags; preserve existing lint annotations when required.
+- During staged config migrations, remove legacy YAML tags to keep unknown-key validation strict, and use temporary in-memory aliases with `json:"-" yaml:"-"` only to avoid cross-package breakage.
 - For typed runtime/validation errors, implement both `Code() string` and `ExitCode() int`.
 - Reuse existing condition/runner semantics (`success()`, `failure()`, `always()`, `changed()`, `on_fail`).
+- For loop-mode extensions, explicit role overrides are authoritative; enable automatic scheduler role selection only when role is unset.
 
 ## Testing Expectations
 - Add tests in the same domain package you changed (for example, `internal/runner/*_test.go`).
 - Use table-driven tests where behavior branches are non-trivial.
 - Keep tests parallel-safe; current test suite consistently uses `t.Parallel()`.
 - Prefer real temp dirs/subprocess behavior over heavy mocks for runner and git flows.
+- For scaffold/config migrations, assert both positive outputs (new files/settings exist) and negative outputs (legacy files/settings are absent).
 
 ## Commit & Pull Request Guidelines
 - Follow Conventional Commits: `<type>(<scope>): <imperative summary>` (example: `feat(runner): add dry-run mode`).
