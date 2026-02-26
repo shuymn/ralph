@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 type mainResult struct {
@@ -14,9 +16,10 @@ type mainResult struct {
 }
 
 type mainStepPlan struct {
-	Role       Role
-	Command    string
-	PromptPath string
+	Role        Role
+	Command     string
+	PromptPath  string
+	InputPrefix string
 }
 
 func runMainStep(
@@ -43,7 +46,11 @@ func runMainStep(
 	//nolint:gosec // command comes from validated user config; shell execution is intentional.
 	cmd := exec.CommandContext(ctx, "sh", "-c", plan.Command)
 	cmd.Dir = opts.WorkingDir
-	cmd.Stdin = promptFile
+	stdin := io.Reader(promptFile)
+	if strings.TrimSpace(plan.InputPrefix) != "" {
+		stdin = io.MultiReader(strings.NewReader(plan.InputPrefix), promptFile)
+	}
+	cmd.Stdin = stdin
 	cmd.Stdout = tmpFile
 	cmd.Stderr = opts.Stderr
 

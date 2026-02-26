@@ -51,6 +51,9 @@ Resolve review scope before reviewing:
 - Do not add unrequested feature proposals.
 - Do not report plan-only/editorial findings unless they directly create a code/test defect or scope violation.
 - Do not emit findings about "no eligible story" based on `stories[].passes`/`deps`; those fields are not review selectors.
+- Keep a strict `one root cause -> one finding` policy.
+- Do not split one root cause into multiple findings with different wording.
+- Do not merge unrelated root causes into one finding.
 
 ## Output Contract (Required: Do Not Remove)
 
@@ -70,8 +73,18 @@ Resolve review scope before reviewing:
   - Tie-break rule: if unsure between two levels, choose the higher level; if the change spans multiple packages, use at least `S`.
 - Keep field labels stable across rounds (`Finding-Key`, `File`, `Impact`, `Recommendation`, `Fix-Effort`, `Fix-Points`).
 - For each finding, include:
-  - `Finding-Key`: stable identifier for cross-round diffing (for example: `path:line:short_slug`).
-  - `File`: concrete file path with line reference.
+  - `Finding-Key`: required stable identifier with this format:
+    - `anchor_file:anchor_line:scope_sig:summary_slug`
+    - `anchor_file`: normalized repository-relative path using `/` separators.
+    - `anchor_line`: integer start line (`>= 0`).
+    - `scope_sig`: first 8 hex chars of `sha256` over sorted unique related file paths joined by `\n`.
+    - `summary_slug`: lowercase slug (`[a-z0-9-]`, max 48 chars, collapse repeated `-`).
+  - `File`: required anchor location in one of these forms only:
+    - `path#L<start>`
+    - `path#L<start>-L<end>`
+  - `Related-Files`: required when the finding spans multiple files.
+    - Comma-separated repository-relative paths.
+    - Sorted lexicographically.
   - `Impact`: why the issue matters.
   - `Recommendation`: concrete fix direction.
   - `Fix-Effort`: `XXS` | `XS` | `S` | `M` | `L`.
@@ -79,3 +92,9 @@ Resolve review scope before reviewing:
 - Add `Fix-Total-Points` as the sum of all finding points in this review.
 - Output `Fix-Total-Points` exactly once at the end of the report.
 - If no issues are found, state that explicitly and set `Fix-Total-Points: 0`.
+- Before finalizing output, run a deterministic self-check:
+  - Every finding has all required fields and label names exactly as specified.
+  - Every `Finding-Key` is unique within the report.
+  - `File` format matches the required grammar.
+  - `Fix-Points` matches `Fix-Effort`.
+  - `Fix-Total-Points` equals the sum of all `Fix-Points`.

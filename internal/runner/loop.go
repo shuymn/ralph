@@ -195,10 +195,15 @@ func Run(ctx context.Context, cfg ralphconfig.Config, opts Options) int {
 			}
 		}
 
+		inputPrefix := ""
+		if reviewRuntimeState != nil && iterationPlan.Role == RoleJudge {
+			inputPrefix = buildJudgeInputPrefix(*reviewRuntimeState)
+		}
 		mainResult, err := runMainStep(ctx, mainStepPlan{
-			Role:       iterationPlan.Role,
-			Command:    iterationPlan.Command,
-			PromptPath: iterationPlan.PromptPath,
+			Role:        iterationPlan.Role,
+			Command:     iterationPlan.Command,
+			PromptPath:  iterationPlan.PromptPath,
+			InputPrefix: inputPrefix,
 		}, opts, tracker)
 		if err != nil {
 			tracker.cleanup(mainResult.OutputPath)

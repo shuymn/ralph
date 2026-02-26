@@ -41,6 +41,7 @@ func parseJudgeContract(path string) (judgeContract, error) {
 	if err != nil {
 		return judgeContract{}, fmt.Errorf("read judge artifact: %w", err)
 	}
+	content = stripJudgeMachineContext(content)
 
 	var payload judgeContractPayload
 	decoder := json.NewDecoder(bytes.NewReader(content))
@@ -97,4 +98,22 @@ func validateJudgeFindingConsistency(newFindings int, newFindingKeys []string) e
 		)
 	}
 	return nil
+}
+
+func stripJudgeMachineContext(content []byte) []byte {
+	trimmed := bytes.TrimLeft(content, " \t\r\n")
+	startMarker := []byte(judgeContextStartMarker)
+	endMarker := []byte(judgeContextEndMarker)
+
+	if !bytes.HasPrefix(trimmed, startMarker) {
+		return content
+	}
+
+	afterStart := trimmed[len(startMarker):]
+	_, afterEnd, found := bytes.Cut(afterStart, endMarker)
+	if !found {
+		return content
+	}
+
+	return bytes.TrimLeft(afterEnd, " \t\r\n")
 }

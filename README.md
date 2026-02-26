@@ -12,6 +12,7 @@ Use `ralph init` to scaffold files, then use `ralph run` or `ralph review` to ex
 - Requires `branchName` in `.ralph/prd.json`; at `run` startup, it does `git switch` to that branch (creates it if missing).
 - In `run` mode, executes `agent.run_command` via `sh -c` and passes `.ralph/prompt.run.md` to stdin.
 - In `review` mode, schedules `review`/`judge` roles and uses `.ralph/prompt.review.md` and `.ralph/prompt.judge.md`.
+  - `judge` stdin prepends machine context JSON (`new_review_files`, `previously_judged_review_files`, etc.) before `prompt.judge.md`.
 - `phases.pre` / `phases.post` are applied only in `run` mode (`review` ignores phases).
 - In the `post` phase (`run` only), `uses: auto_commit` can commit changes automatically.
 - Completion conditions:

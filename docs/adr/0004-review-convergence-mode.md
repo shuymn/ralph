@@ -30,6 +30,7 @@ Proposed
   - `agent.review_command` / `agent.judge_command` は任意 override
 - judge は `.ralph/reviews/<run_id>/JUDGE_XXXX.json` を出力する
   - `run_id` は UTC timestamp 形式 `YYYYMMDDTHHMMSSZ`
+- judge 実行時の stdin は machine context JSON（`new_review_files`, `previously_judged_review_files`, `all_review_files`, `completion_signal` など）を前置し、その後に `prompt.judge.md` を連結して渡す
 - judge JSON の必須キーは `signal`, `new_findings`, `new_finding_keys`
   - `new_finding_keys` は v1 必須
 - 安定判定は `signal == completion.review.signal` かつ `new_findings == 0`
