@@ -36,10 +36,16 @@ func TestReviewSchedulerRules(t *testing.T) {
 	roleLog := filepath.Join(root, ".ralph", "role.log")
 	cfg := testConfig(
 		fmt.Sprintf(
-			"input=$(cat); printf '%%s\\n' \"$input\" >> %s; "+
-				"if [ \"$input\" = %s ]; then "+
+			"input=$(cat); "+
+				"role=%s; "+
+				"if printf '%%s' \"$input\" | grep -F -q %s; then role=%s; fi; "+
+				"printf '%%s\\n' \"$role\" >> %s; "+
+				"if [ \"$role\" = %s ]; then "+
 				"printf '{\"signal\":\"continue\",\"new_findings\":1,\"new_finding_keys\":[\"A\"]}\\n'; "+
 				"else printf 'iteration\\n'; fi",
+			shQuote(reviewPromptMarker),
+			shQuote(judgePromptMarker),
+			shQuote(judgePromptMarker),
 			shQuote(roleLog),
 			shQuote(judgePromptMarker),
 		),
@@ -106,10 +112,16 @@ func TestReviewSchedulerMaxReviewsBoundary(t *testing.T) {
 	roleLog := filepath.Join(root, ".ralph", "role.log")
 	cfg := testConfig(
 		fmt.Sprintf(
-			"input=$(cat); printf '%%s\\n' \"$input\" >> %s; "+
-				"if [ \"$input\" = %s ]; then "+
+			"input=$(cat); "+
+				"role=%s; "+
+				"if printf '%%s' \"$input\" | grep -F -q %s; then role=%s; fi; "+
+				"printf '%%s\\n' \"$role\" >> %s; "+
+				"if [ \"$role\" = %s ]; then "+
 				"printf '{\"signal\":\"continue\",\"new_findings\":1,\"new_finding_keys\":[\"A\"]}\\n'; "+
 				"else printf 'iteration\\n'; fi",
+			shQuote(reviewPromptMarker),
+			shQuote(judgePromptMarker),
+			shQuote(judgePromptMarker),
 			shQuote(roleLog),
 			shQuote(judgePromptMarker),
 		),
@@ -174,10 +186,16 @@ func TestReviewSchedulerRespectsMinReviewsBeforeJudge(t *testing.T) {
 	roleLog := filepath.Join(root, ".ralph", "role.log")
 	cfg := testConfig(
 		fmt.Sprintf(
-			"input=$(cat); printf '%%s\\n' \"$input\" >> %s; "+
-				"if [ \"$input\" = %s ]; then "+
+			"input=$(cat); "+
+				"role=%s; "+
+				"if printf '%%s' \"$input\" | grep -F -q %s; then role=%s; fi; "+
+				"printf '%%s\\n' \"$role\" >> %s; "+
+				"if [ \"$role\" = %s ]; then "+
 				"printf '{\"signal\":\"continue\",\"new_findings\":1,\"new_finding_keys\":[\"A\"]}\\n'; "+
 				"else printf 'iteration\\n'; fi",
+			shQuote(reviewPromptMarker),
+			shQuote(judgePromptMarker),
+			shQuote(judgePromptMarker),
 			shQuote(roleLog),
 			shQuote(judgePromptMarker),
 		),

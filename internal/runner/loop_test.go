@@ -3,6 +3,7 @@ package ralphrunner_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -340,7 +341,7 @@ func TestRoleCommandFallback(t *testing.T) {
 			cfg.Agent.RunCommand = fmt.Sprintf(
 				"input=$(cat); "+
 					"printf '%%s\\n' \"$input\" > %s; "+
-					"if [ \"$input\" = %s ]; then "+
+					"if printf '%%s' \"$input\" | grep -F -q %s; then "+
 					"printf '{\"signal\":\"%s\",\"new_findings\":1,\"new_finding_keys\":[\"F1\"]}\\n'; "+
 					"else printf 'review iteration\\n'; fi",
 				shQuote(stdinCapture),
@@ -383,10 +384,145 @@ func TestRoleCommandFallback(t *testing.T) {
 			}
 
 			got := readFile(t, stdinCapture)
-			if got != tc.promptValue {
-				t.Fatalf("expected prompt from %s, got %q", tc.promptFile, got)
+			switch tc.role {
+			case ralphrunner.RoleRun:
+				t.Fatalf("unexpected role in test case: %q", tc.role)
+			case ralphrunner.RoleReview:
+				if got != tc.promptValue {
+					t.Fatalf("expected prompt from %s, got %q", tc.promptFile, got)
+				}
+			case ralphrunner.RoleJudge:
+				if !strings.Contains(got, "MACHINE_CONTEXT_JSON_START") {
+					t.Fatalf("expected judge machine context start marker, got %q", got)
+				}
+				if !strings.Contains(got, "MACHINE_CONTEXT_JSON_END") {
+					t.Fatalf("expected judge machine context end marker, got %q", got)
+				}
+				if !strings.Contains(got, tc.promptValue) {
+					t.Fatalf("expected judge prompt to be included, got %q", got)
+				}
+			default:
+				t.Fatalf("unexpected role in test case: %q", tc.role)
 			}
 		})
+	}
+}
+
+func TestJudgeInputIncludesMachineContext(t *testing.T) {
+	t.Parallel()
+
+	root, tmpDir := setupWorkspace(
+		t,
+		`{"branchName":"main","stories":[{"id":"TASK-1","passes":false,"deps":[]}]}`,
+		"prompt-run\n",
+	)
+	const (
+		reviewPrompt = "REVIEW_ROLE_PROMPT"
+		judgePrompt  = "JUDGE_ROLE_PROMPT"
+	)
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.review.md"), reviewPrompt+"\n")
+	writeFile(t, filepath.Join(root, ".ralph", "prompt.judge.md"), judgePrompt+"\n")
+
+	judgeInputPath := filepath.Join(root, ".ralph", "judge-input.txt")
+	cfg := testConfig(
+		fmt.Sprintf(
+			"input=$(cat); "+
+				"if printf '%%s' \"$input\" | grep -F -q %s; then "+
+				"printf '%%s' \"$input\" > %s; "+
+				"printf '{\"signal\":\"READY\",\"new_findings\":0,\"new_finding_keys\":[]}\\n'; "+
+				"else printf 'review\\n'; fi",
+			shQuote(judgePrompt),
+			shQuote(judgeInputPath),
+		),
+		nil,
+		nil,
+	)
+	cfg.Agent.MaxIterations = 5
+	cfg.Completion.Review.Signal = "READY"
+	cfg.Completion.Review.ReviewConvergence = ralphconfig.ReviewConvergenceMode{
+		MinReviews:   2,
+		MaxReviews:   2,
+		JudgeEvery:   2,
+		StableRounds: 1,
+	}
+
+	code := ralphrunner.Run(context.Background(), cfg, ralphrunner.Options{
+		WorkingDir: root,
+		Stdout:     io.Discard,
+		Stderr:     io.Discard,
+		TempDir:    tmpDir,
+		Sleep:      func(time.Duration) {},
+		Mode:       ralphrunner.ModeReview,
+	})
+	if code != 0 {
+		t.Fatalf("expected convergence exit code 0, got %d", code)
+	}
+
+	input := readFile(t, judgeInputPath)
+	if !strings.Contains(input, "MACHINE_CONTEXT_JSON_START") {
+		t.Fatalf("expected machine context start marker in judge input, got %q", input)
+	}
+	if !strings.Contains(input, "MACHINE_CONTEXT_JSON_END") {
+		t.Fatalf("expected machine context end marker in judge input, got %q", input)
+	}
+	if !strings.Contains(input, judgePrompt) {
+		t.Fatalf("expected judge prompt to be included in stdin, got %q", input)
+	}
+
+	payload := parseJudgeContextPayload(t, input)
+	if payload.ReviewCount != 2 {
+		t.Fatalf("unexpected review_count: got=%d", payload.ReviewCount)
+	}
+	if payload.ReviewsSinceJudge != 2 {
+		t.Fatalf("unexpected reviews_since_judge: got=%d", payload.ReviewsSinceJudge)
+	}
+	if payload.JudgeCount != 0 {
+		t.Fatalf("unexpected judge_count before run: got=%d", payload.JudgeCount)
+	}
+	if payload.CompletionSignal != "READY" {
+		t.Fatalf("unexpected completion_signal: got=%q", payload.CompletionSignal)
+	}
+	if len(payload.PreviouslyJudgedReviewFiles) != 0 {
+		t.Fatalf(
+			"expected no previously judged review files at first judge, got %v",
+			payload.PreviouslyJudgedReviewFiles,
+		)
+	}
+	if len(payload.NewReviewFiles) != 2 {
+		t.Fatalf("expected two new review files, got %v", payload.NewReviewFiles)
+	}
+	if len(payload.AllReviewFiles) != 2 {
+		t.Fatalf("expected two all review files, got %v", payload.AllReviewFiles)
+	}
+	baseDir := filepath.Join(root, ".ralph", "reviews", payload.RunID)
+	wantNew := []string{
+		filepath.Join(baseDir, "REVIEW_0001.md"),
+		filepath.Join(baseDir, "REVIEW_0002.md"),
+	}
+	for idx, want := range wantNew {
+		if payload.NewReviewFiles[idx] != want {
+			t.Fatalf(
+				"unexpected new_review_files[%d]: got=%q want=%q full=%v",
+				idx,
+				payload.NewReviewFiles[idx],
+				want,
+				payload.NewReviewFiles,
+			)
+		}
+	}
+	wantCurrentJudge := filepath.Join(baseDir, "JUDGE_0001.json")
+	if payload.CurrentJudgeArtifact != wantCurrentJudge {
+		t.Fatalf(
+			"unexpected current_judge_artifact: got=%q want=%q",
+			payload.CurrentJudgeArtifact,
+			wantCurrentJudge,
+		)
+	}
+	if len(payload.PreviousJudgeArtifacts) != 0 {
+		t.Fatalf(
+			"expected no previous judge artifacts at first judge, got %v",
+			payload.PreviousJudgeArtifacts,
+		)
 	}
 }
 
@@ -609,7 +745,7 @@ func TestReviewStableCountResetsOnUnstableJudge(t *testing.T) {
 	cfg := testConfig(
 		fmt.Sprintf(
 			"input=$(cat); "+
-				"if [ \"$input\" = %s ]; then "+
+				"if printf '%%s' \"$input\" | grep -F -q %s; then "+
 				"count=0; "+
 				"if [ -f %s ]; then count=$(cat %s); fi; "+
 				"count=$((count+1)); "+
@@ -751,7 +887,7 @@ func TestReviewJudgeNonZeroDoesNotConverge(t *testing.T) {
 
 	cfg := testConfig(
 		fmt.Sprintf(
-			"input=$(cat); if [ \"$input\" = %s ]; then "+
+			"input=$(cat); if printf '%%s' \"$input\" | grep -F -q %s; then "+
 				"printf '{\"signal\":\"READY\",\"new_findings\":0,\"new_finding_keys\":[]}\\n'; "+
 				"exit 1; fi; printf 'review\\n'",
 			shQuote(judgePrompt),
@@ -1143,4 +1279,54 @@ func readFile(t *testing.T, path string) string {
 func shQuote(value string) string {
 	replaced := strings.ReplaceAll(value, "'", `'"'"'`)
 	return "'" + replaced + "'"
+}
+
+type judgeContextPayload struct {
+	RunID string `json:"run_id"` //nolint:tagliatelle // Judge context schema is intentionally snake_case.
+	//nolint:tagliatelle // Judge context schema is intentionally snake_case.
+	ReviewCount int `json:"review_count"`
+	//nolint:tagliatelle // Judge context schema is intentionally snake_case.
+	JudgeCount int `json:"judge_count"`
+	//nolint:tagliatelle // Judge context schema is intentionally snake_case.
+	ReviewsSinceJudge int `json:"reviews_since_judge"`
+	//nolint:tagliatelle // Judge context schema is intentionally snake_case.
+	CompletionSignal string `json:"completion_signal"`
+	//nolint:tagliatelle // Judge context schema is intentionally snake_case.
+	NewReviewFiles []string `json:"new_review_files"`
+	//nolint:tagliatelle // Judge context schema is intentionally snake_case.
+	PreviouslyJudgedReviewFiles []string `json:"previously_judged_review_files"`
+	//nolint:tagliatelle // Judge context schema is intentionally snake_case.
+	AllReviewFiles []string `json:"all_review_files"`
+	//nolint:tagliatelle // Judge context schema is intentionally snake_case.
+	CurrentJudgeArtifact string `json:"current_judge_artifact"`
+	//nolint:tagliatelle // Judge context schema is intentionally snake_case.
+	PreviousJudgeArtifacts []string `json:"previous_judge_artifacts"`
+}
+
+func parseJudgeContextPayload(t *testing.T, input string) judgeContextPayload {
+	t.Helper()
+
+	const (
+		startMarker = "MACHINE_CONTEXT_JSON_START"
+		endMarker   = "MACHINE_CONTEXT_JSON_END"
+	)
+	start := strings.Index(input, startMarker)
+	if start < 0 {
+		t.Fatalf("missing %q marker in input %q", startMarker, input)
+	}
+	end := strings.Index(input, endMarker)
+	if end < 0 {
+		t.Fatalf("missing %q marker in input %q", endMarker, input)
+	}
+
+	jsonBody := strings.TrimSpace(input[start+len(startMarker) : end])
+	if jsonBody == "" {
+		t.Fatalf("judge context json body must not be empty")
+	}
+
+	var payload judgeContextPayload
+	if err := json.Unmarshal([]byte(jsonBody), &payload); err != nil {
+		t.Fatalf("unmarshal judge context payload: %v", err)
+	}
+	return payload
 }

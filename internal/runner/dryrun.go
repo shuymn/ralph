@@ -141,6 +141,14 @@ func renderReviewDryRunPlan(
 		stdout,
 		"judge_json_contract.stable_condition: signal == completion.review.signal && new_findings == 0",
 	)
+	_, _ = fmt.Fprintln(
+		stdout,
+		"judge_stdin.format: MACHINE_CONTEXT_JSON_START/<json>/MACHINE_CONTEXT_JSON_END + prompt.judge.md",
+	)
+	_, _ = fmt.Fprintln(
+		stdout,
+		"judge_stdin.context_keys: run_id,review_count,judge_count,reviews_since_judge,completion_signal,new_review_files,previously_judged_review_files,all_review_files,current_judge_artifact,previous_judge_artifacts",
+	)
 }
 
 func renderDryRunPlanCommon(stdout io.Writer, plan runPlan) {

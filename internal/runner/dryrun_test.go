@@ -194,6 +194,8 @@ func TestDryRunReviewProfileOutput(t *testing.T) {
 		"completion.review.review_convergence.stable_rounds: 2",
 		"judge_json_contract.required_keys: signal,new_findings,new_finding_keys",
 		"judge_json_contract.stable_condition: signal == completion.review.signal && new_findings == 0",
+		"judge_stdin.format: MACHINE_CONTEXT_JSON_START/<json>/MACHINE_CONTEXT_JSON_END + prompt.judge.md",
+		"judge_stdin.context_keys: run_id,review_count,judge_count,reviews_since_judge,completion_signal,new_review_files,previously_judged_review_files,all_review_files,current_judge_artifact,previous_judge_artifacts",
 	}
 	for _, snippet := range expectedSnippets {
 		if !strings.Contains(out, snippet) {

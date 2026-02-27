@@ -222,6 +222,12 @@ judge role 実行結果（`JUDGE_n.json`）を parse して、次を満たすと
 - review prompt は `prd.plan` が指す plan.md を scope の SoT とし、`stories[].passes/deps` による対象選択を行わない
 - ただしワークスペース内ファイルの参照自体は command 側の振る舞いに依存するため、厳密制御は prompt 規約で担保する
 
+`judge` role の入力契約について:
+
+- runner は `judge` role の標準入力として、machine context JSON を前置してから `.ralph/prompt.judge.md` を連結して渡す
+- machine context JSON には少なくとも `run_id`, `review_count`, `judge_count`, `reviews_since_judge`, `completion_signal`, `new_review_files`, `previously_judged_review_files`, `all_review_files`, `current_judge_artifact`, `previous_judge_artifacts` を含める
+- `new_review_files` と `previously_judged_review_files` は scheduler state から機械的に算出し、judge prompt 本文に依存させない
+
 ### 9. Dry-run / Validation
 
 `ralph run --dry-run` は `completion.run` profile を表示する。
@@ -240,6 +246,7 @@ judge role 実行結果（`JUDGE_n.json`）を parse して、次を満たすと
 - `prompt.review.md` / `prompt.judge.md` path
 - phase は review mode で無効化されること
 - judge JSON 契約（必須キーと判定条件）
+- judge stdin contract（machine context JSON marker と必須 context keys）
 
 validation 失敗時は既存同様 exit `22`。
 

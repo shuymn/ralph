@@ -42,7 +42,7 @@
 - REQ11: `JUDGE_n.json` は `signal` / `new_findings` / `new_finding_keys` を必須キーとして strict parse する。
 - REQ12: 収斂完了は `signal` 一致 + `new_findings==0` の連続安定（`stable_rounds`）と `min_reviews` を AND 条件にする。未収斂で `max_reviews` 到達時は exit `23`。
 - REQ13: `ralph run --dry-run` は run profile（`tail_match`）と run command/prompt/pre-post 計画を表示する。
-- REQ14: `ralph review --dry-run` は review profile（role command 解決、収斂パラメータ、prompt path、judge JSON 契約）を表示する。
+- REQ14: `ralph review --dry-run` は review profile（role command 解決、収斂パラメータ、prompt path、judge JSON 契約、judge stdin machine context 契約）を表示する。
 - REQ15: `ralph init` は run/review profile を含む config と 3 種 prompt を生成し、`review_command` / `judge_command` は初期出力しない。
 - REQ16: review/judge の stderr ログ形式は v1 で固定契約を持たない（JSON 契約対象は judge artifact のみ）。
 
@@ -57,7 +57,7 @@
 - AC07: `completion.run.strategy=tail_match` の runtime 停止判定は従来どおり。
 - AC08: 旧キー（`agent.command`, 旧 completion 形式）を含む config は exit `22`。
 - AC09: `ralph run --dry-run` は run profile（strategy/signal/tail_lines, run command, prompt.run path, pre/post 計画）を表示する。
-- AC10: `ralph review --dry-run` は review profile（収斂設定、role command 解決、review/judge prompt path、judge JSON 契約）を表示する。
+- AC10: `ralph review --dry-run` は review profile（収斂設定、role command 解決、review/judge prompt path、judge JSON 契約、judge stdin machine context 契約）を表示する。
 - AC11: `ralph review` は `completion.review.strategy=review_convergence` のときのみ実行可能で、それ以外は exit `22`。
 - AC12: `ralph run` と `ralph review` は同一 `.ralph/config.yml` を参照する。
 - AC13: `JUDGE_n.json` は `signal` / `new_findings` / `new_finding_keys` 必須で、欠落/型不一致は exit `22`。
