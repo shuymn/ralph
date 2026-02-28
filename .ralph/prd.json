@@ -1,0 +1,126 @@
+{
+  "project": "ralph",
+  "plan": "docs/plans/2026-02-28-go-ts-agent-gateway-plan.md",
+  "branchName": "feat/go-ts-agent-gateway",
+  "stories": [
+    {
+      "id": "task-1",
+      "title": "Gateway Config Model Cutover",
+      "deps": [],
+      "passes": false
+    },
+    {
+      "id": "task-2",
+      "title": "Bundled Gateway Materialization and Platform Guard (TEMP01 Introduce)",
+      "deps": [
+        "task-1"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-3",
+      "title": "TypeScript Gateway Workspace Bootstrap (bun-template Baseline)",
+      "deps": [
+        "task-2"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-4",
+      "title": "TypeScript JSON-RPC Server and Turn Contract",
+      "deps": [
+        "task-3"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-5",
+      "title": "TypeScript Provider Adapters and Unified Stream Normalization",
+      "deps": [
+        "task-4"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-6",
+      "title": "Go Gateway Client and Protocol Validation",
+      "deps": [
+        "task-2",
+        "task-4",
+        "task-5"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-7",
+      "title": "Runner Main-Step Gateway Path and Structured Output Persistence",
+      "deps": [
+        "task-6",
+        "task-8"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-8",
+      "title": "Role-aware Provider Resolution and Dry-Run Trace",
+      "deps": [
+        "task-1"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-9",
+      "title": "Retry/Timeout Taxonomy and Best-Effort Cancel (TEMP02 Introduce)",
+      "deps": [
+        "task-6",
+        "task-7"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-10",
+      "title": "Shared Protocol Fixture Compatibility (Go + TS)",
+      "deps": [
+        "task-3",
+        "task-4",
+        "task-5",
+        "task-6"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-11",
+      "title": "TEMP01 Migrate/Cutover to Multi-Platform Bundles (Deferred)",
+      "deps": [
+        "task-2",
+        "task-3"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-12",
+      "title": "TEMP01 Retire Darwin-only Branches (Deferred)",
+      "deps": [
+        "task-11"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-13",
+      "title": "TEMP02 Migrate/Cutover to Classified Retry Policy (Deferred)",
+      "deps": [
+        "task-9",
+        "task-10"
+      ],
+      "passes": false
+    },
+    {
+      "id": "task-14",
+      "title": "TEMP02 Retire Fixed One-Retry Branch (Deferred)",
+      "deps": [
+        "task-13"
+      ],
+      "passes": false
+    }
+  ]
+}
